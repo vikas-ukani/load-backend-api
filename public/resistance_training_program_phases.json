@@ -1,0 +1,33 @@
+{
+    "data": [
+        {
+            "name": "Specific Conditioning",
+            "code": "SPECIFIC_CONDITIONING",
+            "months": 4,
+            "color": "",
+            "sequence": 2
+        },
+        {
+            "name": "Maintenance Phases",
+            "code": "MAINTENANCE_PHASES",
+            "months": 4,
+            "color": "",
+            "sequence": 3
+        },
+        {
+            "name": "Peaking Phase",
+            "code": "PEAKING_PHASE",
+            "months": null,
+            "weeks": 2,
+            "color": "",
+            "sequence": 4
+        },
+        {
+            "name": "Recovery phase",
+            "code": "RECOVERY_PHASE",
+            "months": 1,
+            "weeks": null,
+            "color": ""
+        }
+    ]
+}
