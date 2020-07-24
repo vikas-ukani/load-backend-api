@@ -80,6 +80,11 @@ class LoadCenterRequestRepositoryEloquent extends BaseRepository implements User
             $value = $value->where('event_price', $input['event_price']);
         }
 
+        /** check where not in user ids */
+        if (isset($input['expect_user_ids'])) {
+            $value = $value->whereNotIn('user_id', $input['expect_user_ids']);
+        }
+
         /** date wise records */
         if (isset($input['start_date'])) {
             $value = $value->where('date', ">=", $input['start_date']);

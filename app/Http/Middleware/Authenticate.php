@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\ApiLog;
 use Closure;
 use Illuminate\Contracts\Auth\Factory as Auth;
 use App\Supports\MessageClass;
+use Exception;
 
 class Authenticate
 {
@@ -42,8 +44,25 @@ class Authenticate
             return $this->sendBadRequest(null, __('validation.common.unauthorized_user'), RESPONSE_UNAUTHORIZED_REQUEST);
             // return response("Unauthorized.", 401);
         }
-//        $request->toArray();
-//        $request['user_id'] = $request['user_id'] ?? \Auth::id();
+        //        $request->toArray();
+        //        $request['user_id'] = $request['user_id'] ?? \Auth::id();
+
+
+        try {
+            $log = [
+                'user_id' => \Auth::id() ?? null,
+                'api_url' => $request->path(), // api url
+                'method' => $request->method(), // api method
+                'request' => $request->toArray(), // api request
+                // 'response' =>   // api response
+            ];
+            if (in_array($request->method(), ['GET', 'DELETE'])) {
+                unset($log['request']);
+            }
+            ApiLog::create($log);
+        } catch (Exception $e) {
+            \Log::error($e->getMessage());
+        }
         return $next($request);
     }
 }

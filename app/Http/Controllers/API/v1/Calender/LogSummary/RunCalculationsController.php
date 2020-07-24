@@ -6,6 +6,7 @@ namespace App\Http\Controllers\API\v1\Calender\LogSummary;
 
 use App\Http\Controllers\Controller;
 use App\Supports\SummaryCalculationTrait;
+use Illuminate\Support\Arr;
 
 class RunCalculationsController extends Controller
 {
@@ -13,13 +14,17 @@ class RunCalculationsController extends Controller
 
     protected $total_distance_unit;
     protected $avg_pace_unit;
+    protected $elevation_gain_unit;
+    protected $gradient_unit;
     protected $avg_speed_unit;
 
     public function __construct()
     {
         $this->total_distance_unit = "km";
-        $this->avg_pace_unit = "km";
+        $this->avg_pace_unit = "min/km";
         $this->avg_speed_unit = "km/hr";
+        $this->gradient_unit = "%";
+        $this->elevation_gain_unit = "m";
     }
 
     /**
@@ -34,15 +39,22 @@ class RunCalculationsController extends Controller
 
         $response = [];
 
-
         #  Calculate Distance By Given Start Lat-Long  and END lat-long
         # START Total Distance 
-        $calculateTotalDistance = $this->calculateTotalDistance(
-            $trainingLog,
-            $activityCode,
-            $isDuration
-        );
-        $response = array_merge($response, $calculateTotalDistance);
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['total_distance'])) {
+            $response = array_merge($response, [
+                'total_distance' => $trainingLog['generated_calculations']['total_distance'],
+                'total_distance_unit' =>  $this->total_distance_unit
+            ]);
+        } else {
+            $calculateTotalDistance = $this->calculateTotalDistance(
+                $trainingLog,
+                $activityCode,
+                $isDuration
+            );
+            $response = array_merge($response, $calculateTotalDistance);
+        }
         # END Total Distance 
 
         /** If there are more than 1 inclination value in the log,
@@ -59,53 +71,78 @@ class RunCalculationsController extends Controller
         }
 
         # START Total Duration 
-        $calculateDuration = $this->calculateDuration(
-            $trainingLog
-        );
-        $response = array_merge($response, $calculateDuration);
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['total_duration'])) {
+            $response = array_merge($response, [
+                'total_duration' => $trainingLog['generated_calculations']['total_duration'],
+                'total_duration_minutes' => $this->convertDurationToMinutes($trainingLog['generated_calculations']['total_duration'])
+            ]);
+        } else {
+            $calculateDuration = $this->calculateDuration(
+                $trainingLog
+            );
+            $response = array_merge($response, $calculateDuration);
+        }
         # END Total Duration 
 
 
         # START Average Speed (can be either km/hr OR mile/hr, depending on the unit setting) 
-        $calculateAverageSpeed = $this->calculateAverageSpeed(
-            $trainingLog,
-            $activityCode,
-            $response['total_distance'],
-            $response['total_duration_minutes']
-        );
-        $response = array_merge($response, $calculateAverageSpeed);
-        # END Average Speed
-
-        /** PACE Start -------------------------------------------------------- */
-        $response['avg_pace'] = 0;
-        $response['avg_pace_unit'] =  $this->avg_pace_unit;
-
-        /** A condition for remove "Division by zero" */
-        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR && (isset($response['total_distance']) && $response['total_distance'] > 0)) {
-            $response['avg_pace_code'] = "A";
-            $response['avg_pace'] = ((($response['total_duration_minutes'] ?? 0) / $response['total_distance'])) ?? 0;
-        }
-
-        /** if found avg_total_pace in exercise then do nothing Just Calculate next step that is "C" */
-        $ifAvgTotalPace = array_first(array_filter(collect($trainingLog['exercise'])->pluck('avg_total_pace')->all()));
-
-        /** Condition wise B OR C */
-        if (isset($ifAvgTotalPace)) {
-            # means Come from Watch 
-            $response['avg_pace_code'] = "B";
-            $response['avg_pace'] = $ifAvgTotalPace;
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['avg_speed'])) {
+            $response = array_merge($response, [
+                'avg_speed' => $trainingLog['generated_calculations']['avg_speed'],
+                'avg_speed_unit' => $this->avg_speed_unit
+            ]);
         } else {
-            //  if (isset($isDuration))
-            # C equation here
-            $response['avg_pace_code'] = "C";
-            $response['avg_pace'] = $this->calculatePaceCalculationGuid(
+            $calculateAverageSpeed = $this->calculateAverageSpeed(
                 $trainingLog['exercise'],
+                $activityCode,
                 $response['total_distance'],
                 $response['total_duration_minutes']
             );
+            $response = array_merge($response, $calculateAverageSpeed);
         }
-        $response['avg_pace'] = round($response['avg_pace'], 2);
-        /** PACE END -------------------------------------------------------- */
+        # END Average Speed
+
+
+        # 3. START Average Pace 
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['avg_pace'])) {
+            $response = array_merge($response, [
+                'avg_pace' => $trainingLog['generated_calculations']['avg_pace'],
+                'avg_pace_unit' =>  $this->avg_pace_unit
+            ]);
+        } else {
+            $calculateAvgPace = $this->calculateAvgPace(
+                $trainingLog['exercise'],
+                $response['total_distance'],
+                $response['total_duration_minutes'],
+                $activityCode
+            );
+            $response = array_merge($response, $calculateAvgPace);
+        }
+        # 3. END Average Pace 
+
+        # Start Elevation Gain
+        $calculateElevationGain = $this->calculateElevationGain(
+            $trainingLog['exercise'],
+            $activityCode
+            // $response['total_distance'],
+            // $response['total_duration_minutes'],
+
+        );
+        $response = array_merge($response, $calculateElevationGain);
+        # End Elevation Gain
+
+        # Start Gradient (%)
+        $calculateGradient = $this->calculateGradient(
+            $trainingLog['exercise'],
+            $activityCode,
+            $response['elevation_gain'],
+            $response['total_distance']
+        );
+        $response = array_merge($response, $calculateGradient);
+        # End Gradient (%)
 
         /** Step 1 (Find m/min):
          * Using the average speed (km/hr or miles/ hr), 
@@ -119,10 +156,10 @@ class RunCalculationsController extends Controller
          * VO2 = (0.2 x speed) + (0.9 x speed x *inclination) + 3.5 
          * *Inclination of 1% = 0.01
          */
-        $inclination = round(($response['inclination'] / 100), 2);
-        $VO2 = (0.2 * $m_min) + (0.9 * $m_min *  $inclination) + 3.5;
-        $VO2 = round($VO2, 2);
-        $response['VO2'] = $VO2;
+        // $inclination = round(($response['inclination'] / 100), 2); // OLD
+        // $VO2 = (0.2 * $m_min) + (0.9 * $m_min *  $inclination) + 3.5; // OLD 
+        $VO2 = (0.2 * $m_min) + (0.9 * $m_min *  ($response['gradient'] / 100)) + 3.5; // NEW
+        $response['VO2'] = $VO2 = round($VO2, 2);
 
         /** Step 3 (Find MET value): 
          * MET = VO2 / 3.5 
@@ -166,7 +203,7 @@ class RunCalculationsController extends Controller
 
                 /**
                  * Step 3 – Find Total Duration
-                 * Lap 1 Duration (in hour) → 20  60 = 0.3333 (4 decimals place)
+                 * Lap 1 Duration (in hour) → 20 / 60 = 0.3333 (4 decimals place)
                  * "duration" => "00:20:00"
                  */
                 $durationArray = explode(':', $exercise['duration']);
@@ -236,7 +273,15 @@ class RunCalculationsController extends Controller
             return array_sum($distanceByDurationPace);
         }
     }
-
+    
+    /**
+     * calculateTotalDistance
+     *
+     * @param  mixed $trainingLog
+     * @param  mixed $activityCode
+     * @param  mixed $isDuration
+     * @return void
+     */
     public function calculateTotalDistance($trainingLog, $activityCode, $isDuration)
     {
         # Start Total Distance Calculation ------------------------------------------------------------------------
@@ -246,7 +291,7 @@ class RunCalculationsController extends Controller
         $exerciseTotalDistanceArray = collect($trainingLog['exercise'])->whereNotIn('total_distance',  ['0', null, 0])->pluck('total_distance')->all();
         if (isset($exerciseTotalDistanceArray) && is_array($exerciseTotalDistanceArray) && count($exerciseTotalDistanceArray) > 0) {
             /** all meter data convert to KM */
-            $total_distance = array_first($exerciseTotalDistanceArray);
+            $total_distance = Arr::first($exerciseTotalDistanceArray);
             $total_distance = round(($total_distance * 0.001), 2);
             $total_distance_code = "B";
         }
@@ -264,26 +309,13 @@ class RunCalculationsController extends Controller
             $total_distance = $this->getTotalDistanceFromStartEndLatitudeLongitude($trainingLog);
             $total_distance_code = "A";
         }
-        // if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
-        //     # if OutDoor Then Calculate  "A" 
-        //     /* get all lat long from exercise object. */
-        //     $startLatLong['start_lat'] = array_first(array_filter(collect($trainingLog['exercise'])->pluck(['start_lat'])->all()));
-        //     $startLatLong['start_long'] = array_first(array_filter(collect($trainingLog['exercise'])->pluck(['start_long'])->all()));
-        //     $endLatLong['end_lat'] = array_first(array_filter(collect($trainingLog['exercise'])->pluck(['end_lat'])->all()));
-        //     $endLatLong['end_long'] = array_first(array_filter(collect($trainingLog['exercise'])->pluck(['end_long'])->all()));
 
-        //     /** Finally Total Distance */
-        //     $total_distance = $this->distance($startLatLong['start_lat'], $startLatLong['start_long'], $endLatLong['end_lat'], $endLatLong['end_long'], "K");
-        //     $response['total_distance_code'] = "A";
-        //     // dd('total distance', $total_distance);
-        // }
         # Use D here if all distance is 0  "D"
         if ($total_distance == 0) {
             $total_distance_code = "D";
             $total_distance = collect($trainingLog['exercise'])->sum('distance');
         }
         # End Total Distance Calculation  ------------------------------------------------------------------------
-        // dd('chec', $total_distance);
         return [
             'total_distance' => round($total_distance, 2),
             'total_distance_unit' =>  $this->total_distance_unit,
@@ -291,12 +323,19 @@ class RunCalculationsController extends Controller
         ];
     }
 
-
+    /**
+     * calculateDuration => updated duration calculations.
+     *
+     * @param  mixed $trainingLog
+     * @return void
+     */
     public function calculateDuration($trainingLog)
     {
         # Calculate Duration From Exercise using start_time and end_time
         $totalDurationMinute = 0;
+        /** get total_minute from start_time and end_time */
         $totalDurationMinute = $this->totalDurationMinute($trainingLog);
+
         /** 
          * Calculate Total Duration Outdoor and Indoor: A → B → C
          */
@@ -311,47 +350,54 @@ class RunCalculationsController extends Controller
             $ifDistance = $trainingLog['exercise'][0]['distance'];
             if (isset($ifDistance)) {
                 # C Use here
-                $totalDurationMinute =   $this->calculateDurationCalculationGuid($trainingLog['exercise']);
+                $totalDurationMinute = $this->calculateDurationCalculationGuid($trainingLog['exercise']);
                 $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60)));
                 // dd('final is ', $totalDurationMinute, $response['total_duration']);
                 $totalDurationMinuteCode = "C";
             } else {
                 # D Use here | all add it together duration 
-                $totalDurationMinute =   $this->addAllDurationTimeFromExercise($trainingLog['exercise']);
-                $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60)));
+                // $totalDurationMinute = $this->addAllDurationTimeFromExercise($trainingLog['exercise']);  // OLD
+                $totalDurationMinute = $this->addAllDurationAndRestTimeFromExercise($trainingLog['exercise']);  // NEW
+                $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0) * 60)));
                 $totalDurationMinuteCode = "D";
             }
-            // dd('check is duration', $trainingLog['exercise'][0]);
+            // dd('check is duration',$trainingLog['exercise'][0] );
         } else {
-            # A equation
-            $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60)));
+            # A equation 
+            $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0) * 60)));
             $totalDurationMinuteCode = "A";
         }
         $response['total_duration_in_minute'] = $totalDurationMinute;
-        // $response['total_duration'] = $totalDurationMinute == 0 ? "00:00:00" : (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60)));
+        // $response['total_duration'] = ($totalDurationMinute == 0) ? "00:00:00" :(gmdate("H:i:s", (($totalDurationMinute ?? 0) * 60)));
         // dd('total rpm ', $total_rpm, $trainingLog['exercise']);
-        // $data = 
         return [
             'total_duration_minutes' => round($totalDurationMinute, 2),
-            'total_duration' => (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60))),
+            'total_duration' => $this->convertDurationMinutesToTimeFormat($totalDurationMinute),
             'total_duration_code' => $totalDurationMinuteCode,
         ];
-
-        // return $data;
     }
-
-    public function calculateAverageSpeed($trainingLog, $activityCode, $total_distance, $total_duration_minutes)
+    
+    /**
+     * calculateAverageSpeed => calculate average speed updated
+     *
+     * @param  mixed $exercises
+     * @param  mixed $activityCode
+     * @param  mixed $total_distance
+     * @param  mixed $total_duration_minutes
+     * @return void
+     */
+    public function calculateAverageSpeed($exercises, $activityCode, $total_distance, $total_duration_minutes)
     {
         /** SPEED START ****************************************** */
         $avg_speed = 0;
         // $response['avg_speed'] = $totalDurationMinute == 0 ? 0 : round(($response['total_distance'] / $totalDurationMinute), 2);
-        $isDuration = $trainingLog['exercise'][0]['duration'];
+        $isDuration = $exercises[0]['duration'];
 
         # C) If the user click on the ‘Complete’ button to log the workout, use equation (Please see
         // Average Speed Calculation Guide).
         $avg_speed_code = "C";
         $avg_speed = $this->calculateAverageSpeedGuide(
-            $trainingLog['exercise'],
+            $exercises,
             $total_distance,
             $total_duration_minutes
         );
@@ -366,10 +412,122 @@ class RunCalculationsController extends Controller
         }
 
         $data = [
-            'avg_speed'        =>     round($avg_speed, 2),
-            'avg_speed_unit'    =>   $this->avg_speed_unit,
-            'avg_speed_code'   =>     $avg_speed_code
-        ]; 
+            'avg_speed' =>      round($avg_speed, 2),
+            'avg_speed_unit' =>      $this->avg_speed_unit,
+            'avg_speed_code' =>      $avg_speed_code
+        ];
         return $data;
+    }
+
+    public function calculateAvgPace($exercises, $totalDistance, $totalDurationMinute, $activityCode)
+    {
+        $avg_pace = 0;
+        $avg_pace_code = null;
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            # A) Use phone location and motion sensors (GPS + Accelerometer) (only for Outdoor)
+            // $avg_pace_code = "A";
+        }
+
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+            # B) Use phone motion sensor (Accelerometer) (only for Indoor)
+            // $avg_pace_code = "B";
+        }
+
+        if ($avg_pace == 0) {
+            # C) Record the Average Pace value recorded from the exercise watch (if available).
+            // $avg_pace_code = "C";
+        }
+
+        if ($avg_pace == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+            # D) For Indoor (if no movement detected) use OR if the user click on the ‘Complete’ button
+            # to log the workout, use equation (Please see Average Pace Calculation Guide).
+            $avg_pace = $this->calculatePaceCalculationGuid(
+                $exercises,
+                $totalDistance,
+                $totalDurationMinute
+            );
+            $avg_pace_code = "D";
+        }
+        $avg_pace = $this->convertPaceNumberTo_M_S_format($avg_pace);
+
+        // "avg pace" End Calculate  -------------------------------------------
+        return [
+            'avg_pace' => $avg_pace ?? null,
+            'avg_pace_unit' =>  $this->avg_pace_unit,
+            'avg_pace_code' => $avg_pace_code
+        ];
+    }
+
+    public function calculateElevationGain($exercises, $activityCode)
+    {
+        $elevation_gain = 0;
+        $elevation_gain_code = null;
+
+        if ($elevation_gain == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            # Out Door
+            // Pending
+        } else {
+            # In Door
+            // Pending
+        }
+
+        return [
+            'elevation_gain' => $elevation_gain ?? null,
+            'elevation_gain_unit' =>  $this->elevation_gain_unit,
+            'elevation_gain_code' => $elevation_gain_code
+        ];
+    }
+
+
+    /**
+     * calculateGradient => calculate gradient
+     *
+     * @param  mixed $exercises
+     * @param  mixed $activityCode
+     * @param  mixed $elevation_gain
+     * @param  mixed $total_distance
+     * @return array
+     */
+    public function calculateGradient($exercises, $activityCode, $elevation_gain, $total_distance)
+    {
+        $gradient = 0;
+        $gradient_code = null;
+        // dd('check gradient', $activityCode, $exercises);
+
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            # A) Find Gradient with equation:
+            /**
+             * Step 1) Convert Total Distance unit (km or miles) to meters or yards
+             * Step 2) Lvl = (Elevation gain/ Step 1) x 100
+             */
+            $total_distance_in_meters = $total_distance // convert to km first
+                * 1000; // convert km to meters
+            $gradient = ($elevation_gain / $total_distance_in_meters) * 100;
+            $gradient_code = "A";
+
+            # B) If Elevation Gain value is not available, Gradient will show '-'
+            if ($gradient == 0 || in_array($elevation_gain, [0, 0.0, null, ''])) {
+                $gradient = 0;
+                $gradient_code = "B";
+            }
+        }
+        if ($gradient == 0) {
+            # C) For Indoor use OR if the user click on the ‘Complete’ button to log the workout, use equation:
+            /**
+             * Step 1) Total Gradient = Add all the % value(s) in the training log.
+             * Step 2) Gradient = Total Gradient / Total lap(s)
+             */
+            $totalGradient = collect($exercises)->sum('percentage');
+            $gradient = $totalGradient / count($exercises);
+            $gradient_code = "C";
+        }
+
+
+
+        return [
+            'gradient' => $gradient ?? null,
+            'gradient_unit' =>  $this->gradient_unit,
+            'gradient_code' => $gradient_code
+        ];
     }
 }

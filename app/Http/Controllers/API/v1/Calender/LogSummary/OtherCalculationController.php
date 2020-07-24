@@ -13,6 +13,7 @@ class OtherCalculationController extends Controller
     protected $avg_speed_unit;
     protected $avg_pace_unit;
     protected $total_power_unit;
+    protected $average_power_unit;
     protected $total_relative_power_unit;
 
     public function __construct()
@@ -21,6 +22,7 @@ class OtherCalculationController extends Controller
         $this->avg_speed_unit = "km/hr";
         $this->avg_pace_unit = "min/100m";
         $this->total_power_unit = "W";
+        $this->average_power_unit = "W";
         $this->total_relative_power_unit = "W/kg";
     }
 
@@ -35,12 +37,21 @@ class OtherCalculationController extends Controller
         $isDuration = $trainingLog['exercise'][0]['duration'];
 
         # 1. Total Distance 
-        $calculateTotalDistance = $this->calculateTotalDistance(
-            $trainingLog,
-            $isDuration
-        );
-        $response = array_merge($response, $calculateTotalDistance);
-        # 1. Total Distance END
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['total_distance'])) {
+            $response = array_merge($response, [
+                'total_distance' => $trainingLog['generated_calculations']['total_distance'],
+                'total_distance_unit' =>  $this->total_distance_unit
+            ]);
+        } else {
+            $calculateTotalDistance = $this->calculateTotalDistance(
+                $trainingLog,
+                $activityCode,
+                $isDuration
+            );
+            $response = array_merge($response, $calculateTotalDistance);
+        }
+        # 1. END Total Distance 
 
         # 2. Lvl  
         $calculateLVL = $this->calculateLVL($trainingLog);
@@ -53,48 +64,102 @@ class OtherCalculationController extends Controller
         # 3. RPM  END
 
         # 4. Total Duration 
-        $calculateDuration = $this->calculateDuration(
-            $trainingLog,
-            $isDuration
-        );
-        $response = array_merge($response, $calculateDuration);
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['total_duration'])) {
+            $response = array_merge($response, [
+                'total_duration' => $trainingLog['generated_calculations']['total_duration'],
+                'total_duration_minutes' => $this->convertDurationToMinutes($trainingLog['generated_calculations']['total_duration'])
+            ]);
+        } else {
+            $calculateDuration = $this->calculateDuration(
+                $trainingLog,
+                $isDuration
+            );
+            $response = array_merge($response, $calculateDuration);
+        }
         # 4. Total Duration END
 
         # 5. Power
-        $calculatePower = $this->calculatePower(
-            $trainingLog,
-            $response['total_lvl'],
-            $response['total_rpm'],
-            $response['total_duration_minutes']
-        );
-        $response = array_merge($response, $calculatePower);
+        // $calculatePower = $this->calculatePower(
+        //     $trainingLog,
+        //     $response['total_lvl'],
+        //     $response['total_rpm'],
+        //     $response['total_duration_minutes']
+        // );
+        // $response = array_merge($response, $calculatePower);
         # 5. Power END
+
+        # Start Average Power (unit in W)
+        $calculateAveragePower = $this->calculateAveragePower(
+            $trainingLog['exercise']
+        );
+        $response = array_merge($response, $calculateAveragePower);
+        # End Average Power 
 
         # 6. Relative Power (unit in W/kg)
         $calculateRelativePower = $this->calculateRelativePower(
-            $response['total_power'],
+            $response['average_power'],
             $trainingLog['user_detail']['weight']
         );
         $response = array_merge($response, $calculateRelativePower);
         # 6. Relative Power (unit in W/kg) END
 
         # 7. Average Speed (can be either km/hr OR mile/hr, depending on the unit setting)
-        $calculateAverageSpeed = $this->calculateAverageSpeed(
-            $trainingLog,
-            $response['total_distance'],
-            $response['total_duration_minutes']
-        );
-        $response = array_merge($response, $calculateAverageSpeed);
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['avg_speed'])) {
+            $response = array_merge($response, [
+                'avg_speed' => $trainingLog['generated_calculations']['avg_speed'],
+                'avg_speed_unit' => $this->avg_speed_unit
+            ]);
+        } else {
+            $calculateAverageSpeed = $this->calculateAverageSpeed(
+                $trainingLog['exercise'],
+                $response['total_distance'],
+                $response['total_duration_minutes']
+            );
+            $response = array_merge($response, $calculateAverageSpeed);
+        }
         # 7. Average Speed END
 
-        # Total kcal Burnt 
+        # start Average Pace
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['avg_pace'])) {
+            $response = array_merge($response, [
+                'avg_pace' => $trainingLog['generated_calculations']['avg_pace'],
+                'avg_pace_unit' => $this->avg_pace_unit
+            ]);
+        } else {
+            $calculateAvgPace = $this->calculateAvgPace(
+                $trainingLog['exercise'],
+                $response['total_distance'],
+                $response['total_duration_minutes'],
+                $activityCode
+            );
+            $response = array_merge($response, $calculateAvgPace);
+        }
+        # end Average Pace
+
+        # Start Average Heart Rate
+        $averageHeartRate = $this->averageHeartRate($trainingLog['exercise']);
+        $response = array_merge($response, $averageHeartRate);
+        # End Average Heart Rate
+
+        # Start Level
+        $calculateLevel = $this->calculateLevel($trainingLog['exercise']);
+        $response = array_merge($response, $calculateLevel);
+        # End Level
+
+        # Start Average RPM
+        $calculateAverageRPM = $this->calculateAverageRPM($trainingLog['exercise']);
+        $response = array_merge($response, $calculateAverageRPM);
+        # End Average RPM
+
+        # Total kcal 
         $response['BMI'] = $BMI = round(((($trainingLog['user_detail']['weight'] ?? 0) / ($trainingLog['user_detail']['height'] ?? 0)  / ($trainingLog['user_detail']['height'] ?? 0)) * 10000), 2);
+        $usersWeight = $trainingLog['user_detail']['weight'] ?? 0;
         $calculateTotalKcalBurn = $this->calculateTotalKcalBurn(
             $trainingLog,
-            $response['total_power'],
-            $response['BMI'],
-            $response['total_lvl'],
-            $response['total_rpm'],
+            $usersWeight,
             $response['total_duration_minutes']
         );
         $response = array_merge($response, $calculateTotalKcalBurn);
@@ -107,26 +172,41 @@ class OtherCalculationController extends Controller
     /**
      * Calculate Total Duration condition wise
      */
-    public function calculateTotalDistance($trainingLog, $isDuration)
+    public function calculateTotalDistance($trainingLog, $activityCode, $isDuration)
     {
         $total_distance = 0;
-        // "Total Duration" Start Calculate -------------------------------------------
-        #  "A") Use the value recorded from the exercise watch (if available)
-        $total_distance = collect($trainingLog['exercise'])->where('total_distance', null)->pluck('total_distance')->last();
-        $total_distance_code = "A";
+        # A) Use phone location and motion sensors (GPS + Accelerometer) (if there is a change in position)
+        // $total_distance_code = "A";
 
-
-        # "B" If the user click on the ‘Complete’ button to log the workout, use equation 
-        // (If user use ‘Duration’ in the log. Please see Distance Calculation Guide).
-        if (isset($isDuration)) {
-            $total_distance = $this->findTotalDistanceUsingDuration($trainingLog['exercise']);
-            $total_distance_code = "B";
-        } else {
-            # "C" If the user click on the ‘Complete’ button to log the workout, add all the distance keyed in
-            // the log together (If user use ‘Distance’ in the log).
-            $total_distance = collect($trainingLog['exercise'])->sum('distance');
-            $total_distance_code = "C";
+        if ($total_distance == 0) {
+            # B) Use phone motion sensor (Accelerometer) (if there is no change in position)
+            // $total_distance_code = "B";
         }
+
+        if ($total_distance == 0) {
+            # C) Record the Total Distance value recorded from the exercise watch (if available).
+            // $total_distance_code = "B";
+        }
+
+        if ($total_distance == 0) {
+            # D) If the user click on the ‘Complete’ button to log the workout, use equation (If user use
+            # ‘Duration’ and ‘Speed/Pace’ in the log. Please see Distance Calculation Guide).
+            if (isset($isDuration)) {
+                $total_distance = $this->findTotalDistanceUsingDuration($trainingLog['exercise']);
+                $total_distance_code = "D";
+            } else if (!isset($isDuration)) {
+                # E) If the user click on the ‘Complete’ button to log the workout, use equation (If user use
+                # ‘Distance’ in the log): Add all the Distance data keyed in the log.
+                $total_distance = collect($trainingLog['exercise'])->sum('distance');
+                $total_distance_code = "E";
+            }
+        }
+
+        if ($total_distance == 0) {
+            # F) If user did not key in ‘Speed/ Pace’ parameter, Total Distance will show ‘-‘.
+            $total_distance_code = "F";
+        }
+
         // "Total Duration" End Calculate  -------------------------------------------
         return [
             'total_distance' => round($total_distance, 2),
@@ -183,57 +263,40 @@ class OtherCalculationController extends Controller
         $start_time = collect($trainingLog['exercise'])->where('start_time', '<>', null)->pluck('start_time')->first();
         $end_time = collect($trainingLog['exercise'])->where('end_time', '<>', null)->pluck('end_time')->first();
 
-        # "B" Record the Total Duration recorded from the exercise watch (if available).
-        $totalDurationMinuteCode = "B";
+        # A) Use phone tracker (when user starts the workout log to when the workout log ends).
+        // $totalDurationMinuteCode = "A";
 
+        if ($totalDurationMinute == 0) {
+            # B) Record the Total Duration recorded from the exercise watch (if available).
+            $totalDurationMinuteCode = "B";
+        }
 
-        // (If user use ‘Duration’ in the log). 
-        // dd('asd', $isDuration, $totalDurationMinute, $trainingLog['exercise']);
-        if (!isset($isDuration)) {
-            // dd('asd', $isDuration);
-            // && in_array(($totalDurationMinute * 60), range(0, 10)) // not mention for this condition
-            # "A" Use phone tracker (when user starts the workout log to when the workout log ends) and
-            # apply the equation accordingly (If user use ‘Distance’ in the log. Please see Duration
-            # Calculation Guide).
+        if ($totalDurationMinute == 0) {
+            # C) If the user click on the ‘Complete’ button to log the workout, use equation 
+            # (If user use ‘Distance’ and ‘Speed/Pace’ in the log. Please see Duration Calculation Guide).
             $totalDurationMinute = $this->calculateDurationCalculationGuid($trainingLog['exercise']);
-            $totalDurationMinuteCode = "A";
-
-            /** if found 0 then add all start and end duration Time */
-            if ($totalDurationMinute == 0) {
-                $totalDurationMinute = $this->totalDurationMinute($trainingLog);
-                $totalDurationMinuteCode = 'A2';
-            }
-            // dd('final duration', $totalDurationMinute, (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60))),  $totalDurationMinuteCode, $trainingLog['exercise']);
-        } else if (isset($isDuration)) {
-            // && in_array(($totalDurationMinute * 60), range(0, 10)) // not mention for this condition
-            # "C" If the user click on the ‘Complete’ button to log the workout, use the duration that is
-            # keyed on the log (including ‘Rest’ duration) and add it all together (If user use ‘Duration’
-            # in the log).
-            $getAllRest = collect($trainingLog['exercise'])->pluck('rest')->all();
-            $getAllDuration = collect($trainingLog['exercise'])->pluck('duration')->all();
-
-            /** add all it together duration from lap */
-            $totalDurationMinute = $this->addAllDurationTimeFromExercise($trainingLog['exercise']);
-
-            /** add REST in duration in minutes */
-            foreach ($trainingLog['exercise'] as $key => $exercise) {
-                if (isset($exercise['rest'])) {
-                    $restArray = explode(":", $exercise['rest']);
-                    $totalDurationMinute += (
-                        ((int) $restArray[0])  // Minutes and second only format is  00:00
-                        + (((int) $restArray[1] / 60) ?? 0) // second to minutes
-                    );
-                }
-            }
             $totalDurationMinuteCode = "C";
         }
+
+        if ($totalDurationMinute == 0) {
+            # D) If the user click on the ‘Complete’ button to log the workout, use equation 
+            # (If user use ‘Duration’ in the log): Add all the Duration (including Rest) data keyed in the log.
+            $totalDurationMinute = $this->addAllDurationAndRestTimeFromExercise($trainingLog['exercise']);
+            $totalDurationMinuteCode = "D";
+        }
+
+        if ($totalDurationMinute == 0) {
+            # E) If user did not key in ‘Speed/ Pace’ parameter, Total Duration will show ‘-‘.
+            $totalDurationMinute = 0;
+            $totalDurationMinuteCode = "E";
+        }
+
         return [
             'total_duration_minutes' => round($totalDurationMinute, 2),
-            'total_duration' => (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60))),
-            'total_duration_code' => $totalDurationMinuteCode,
+            'total_duration' => $this->convertDurationMinutesToTimeFormat($totalDurationMinute),
+            'total_duration_code' => $totalDurationMinuteCode
         ];
     }
-
 
     public function getAverageOrFirst($exercises, $keyName, $codeName)
     {
@@ -290,53 +353,149 @@ class OtherCalculationController extends Controller
             $total_power_code = "B";
         }
         return [
-            'total_power'        =>     round($total_power, 2),
-            'total_power_unit'   =>     $this->total_power_unit,
-            'total_power_code'   =>     $total_power_code
+            'total_power' => round($total_power, 2),
+            'total_power_unit' => $this->total_power_unit,
+            'total_power_code' => $total_power_code
         ];
     }
 
-    public function calculateRelativePower($total_power, $userBodyWeight)
+    /**
+     * calculateRelativePower
+     *
+     * @param  mixed $average_power
+     * @param  mixed $userBodyWeight
+     * @return void
+     */
+    public function calculateRelativePower($average_power, $userBodyWeight)
     {
         $total_relative_power = 0;
-        $total_relative_power_code = "A";
 
-        # "A" Use this equation to find Relative Power: 
-        // Relative Power = Power / Body weight (in kg)
-        $total_relative_power = $total_power / ($userBodyWeight ?? 0);
-        $total_relative_power_code = "A";
-
-        return [
-            'total_relative_power'        =>     round($total_relative_power, 2),
-            'total_relative_power_unit'   =>    $this->total_relative_power_unit,
-            'total_relative_power_code'   =>     $total_relative_power_code
-        ];
-    }
-
-    public function calculateAverageSpeed($trainingLog, $total_distance, $total_duration_minutes)
-    {
-        $avg_speed = 0;
-        # "A" Record the Average Speed value recorded from the exercise watch (if available)
-        $avg_speed_code = "A";
-
-        # "B" If the user click on the ‘Complete’ button to log the workout, use equation (Please see
-        # Average Speed Calculation Guide).
-        if ($avg_speed == 0) {
-            $avg_speed = $this->calculateAverageSpeedGuide($trainingLog['exercise'], $total_distance, $total_duration_minutes);
-            $avg_speed_code = "B";
+        if (is_int($average_power)) {
+            # "A" Use this equation to find Relative Power: 
+            // Relative Power = Power / Body weight (in kg)
+            $total_relative_power = $average_power / ($userBodyWeight ?? 0);
+            $total_relative_power_code = "A";
+        } else {
+            # B) If Average Power value is not available, Relative Power will show ‘-‘
+            $total_relative_power = '-';
+            $total_relative_power_code = "B";
         }
 
         return [
-            'avg_speed'        =>     round($avg_speed, 2),
-            'avg_speed_unit'    =>   $this->avg_speed_unit,
-            'avg_speed_code'   =>     $avg_speed_code
+            'total_relative_power' => round($total_relative_power, 2),
+            'total_relative_power_unit' => $this->total_relative_power_unit,
+            'total_relative_power_code' => $total_relative_power_code
         ];
     }
 
-    public function calculateTotalKcalBurn($trainingLog, $power, $BMI,  $total_lvl,  $total_rpm, $total_duration_minutes)
+    /**
+     * calculateAverageSpeed
+     *
+     * @param  mixed $exercises
+     * @param  mixed $total_distance
+     * @param  mixed $total_duration_minutes
+     * @return array
+     */
+    public function calculateAverageSpeed($exercises, $total_distance, $total_duration_minutes)
     {
-        # B case code here.
+        $avg_speed = 0;
+
+        $isPace = isset($exercises[0]['pace']);
+        if (!$isPace) {
+            $this->avg_speed_unit = "km/hr";
+        } else if ($isPace) {
+            $this->avg_speed_unit = "m/min";
+        }
+
+        # A) Use phone location and motion sensors (GPS + Accelerometer) (if there is a change in position/ movement)
+        // $avg_speed_code = "A";
+
+        if ($avg_speed == 0) {
+            # B) Use phone motion sensor (Accelerometer) (if there is no change in position/ movement)
+            // $avg_speed_code = "B";
+        }
+
+        if ($avg_speed == 0) {
+            # C) Record the Average Speed value recorded from the exercise watch (if available)
+            // $avg_speed_code = "C";
+        }
+
+        if ($avg_speed == 0) {
+            # D) If the user click on the ‘Complete’ button to log the workout, use equation (If user uses
+            # ‘Speed’ parameter, please see Average Speed Calculation Guide (NOTE: Stop at ‘Average Speed’ step).
+            # If user uses ‘Pace’ parameter, please see Average Pace Calculation Guide_Others to find Average Speed.
+            if (!$isPace) {
+                # (If user uses ‘Speed’ parameter, please see Average Speed Calculation Guide (NOTE: Stop at ‘Average Speed’ step).
+                $avg_speed = $this->calculateAverageSpeedGuide_OTHER($exercises);
+            } else if ($isPace) {
+                # If user uses ‘Pace’ parameter, please see Average Pace Calculation Guide_Others to find Average Speed.
+                // calculatePaceCalculationGuidForOTHER
+                $avg_speed = $this->calculatePaceCalculationGuidForOTHER($exercises);
+            }
+            $avg_speed_code = "D";
+        }
+
+        // E) If user did not key in ‘Speed/ Pace’ parameter, Average Speed will show ‘-’.
+
+        return [
+            'avg_speed' => round($avg_speed, 2),
+            'avg_speed_unit' => $this->avg_speed_unit,
+            'avg_speed_code' => $avg_speed_code
+        ];
+    }
+
+    public function calculateTotalKcalBurn($trainingLog, $usersWeight, $total_duration_minutes)
+    {
+        $total_kcal = 0;
         $isWatt = $trainingLog['exercise'][0]['watt'];
+        $isUserMale = $trainingLog['user_detail']['gender'] == GENDER_MALE;
+        $isUserFemale = $trainingLog['user_detail']['gender'] == GENDER_FEMALE;
+
+        $intensity_CODE = $trainingLog['training_intensity']['code'];
+
+        // dd('log cec ', $isUserFemale, $trainingLog);
+        // # A) Record the Total kcal value recorded from the exercise watch (if available).
+        // $total_kcal_code = 'A';
+
+        if ($total_kcal == 0) {
+            # B) Find Total kcal with equation:
+            # Step 1) Determine the gender of the user (Male/ Female) and the Intensity in the training log set by the user
+            # Step 2) Determine the MET according using the Tables (refer below)
+            switch ($intensity_CODE) {
+                case TRAINING_INTENSITY_LOW:
+                    $mets = $isUserMale ? 2.8 : 2;
+                    break;
+                case TRAINING_INTENSITY_MODERATELY_LOW:
+                    $mets = $isUserMale ? 5 : 3.6;
+                    break;
+                case TRAINING_INTENSITY_MODERATE:
+                    $mets = $isUserMale ? 7 : 5.2;
+                    break;
+                case TRAINING_INTENSITY_MODERATELY_HIGH:
+                    $mets = $isUserMale ? 9 : 6.8;
+                    break;
+                case TRAINING_INTENSITY_HIGH:
+                    $mets = $isUserMale ? 10 : 7.6;
+                    break;
+            }
+            # Step 3) kcal/min = kcal/min = 0.0175 x MET x user’s weight (in kilograms)
+            $kcal_min = 0.0175 * $mets * $usersWeight;
+            # Step 4) Total kcal = Step 3 x Total Duration in mins
+            $total_kcal = $kcal_min *  $total_duration_minutes;
+            $total_kcal_code = 'B';
+        }
+
+        return [
+            // 'total_watt' => $allAddedWatt,
+            "total_kcal" => round($total_kcal, 2),
+            "total_kcal_code" => $total_kcal_code ?? null
+        ];
+
+
+
+
+
+        // OLD  start
 
         /** 1
          * Step 1 (Find VO2):
@@ -421,6 +580,158 @@ class OtherCalculationController extends Controller
         return [
             'total_watt' => $allAddedWatt,
             "total_kcal"    =>  round($total_kcal, 2)
+        ];
+    }
+
+    /** used from Generate Calculation  - TrainingLog.php */
+    public function calculateAvgPace($exercises, $totalDistance, $totalDurationMinute, $activityCode)
+    {
+        $avg_pace = 0;
+        $isPace = isset($exercises[0]['pace']);
+        if ($isPace) {
+            $this->avg_pace_unit = "min/500m";
+        } else if (!$isPace) {
+            $this->avg_pace_unit = "min/km";
+        }
+
+        # A) Use phone location and motion sensors (GPS + Accelerometer) (if there is a change in position/ movement)
+
+        if ($avg_pace == 0) {
+            # B) Use phone motion sensor (Accelerometer) (if there is no change in position/ movement)
+            $avg_pace_code = "B";
+        }
+
+        if ($avg_pace == 0) {
+            # C) Record the Average Pace value recorded from the exercise watch (if available).
+            $avg_pace_code = "C";
+        }
+
+        if ($avg_pace == 0) {
+            # D) If the user click on the ‘Complete’ button to log the workout, use equation 
+            # (If user uses ‘Pace’ parameter, please see Average Pace Calculation Guide_Others (NOTE: Stop at  ‘Average Pace’ step).
+            # If user uses ‘Speed’ parameter, please see Average Speed Calculation Guide to find Average Pace).
+            if ($isPace) {
+                # (If user uses ‘Pace’ parameter, please see Average Pace Calculation Guide_Others (NOTE: Stop at  ‘Average Pace’ step).
+                $avg_pace = $this->calculatePaceCalculationGuidForOTHER($exercises);
+            } else if (!$isPace) {
+                # If user uses ‘Speed’ parameter, please see Average Speed Calculation Guide to find Average Pace).
+                $avg_speed = $this->calculateAverageSpeedGuide_OTHER($exercises);
+                $avg_pace =  60 / $avg_speed;
+            }
+            $avg_pace_code = "D";
+        }
+
+        // if(){
+        // # E) If user did not key in ‘Speed/ Pace’ parameter, Average Pace will show ‘-’.
+        // }
+
+        $avg_pace = $this->convertPaceNumberTo_M_S_format($avg_pace);
+        // "avg pace" End Calculate  -------------------------------------------
+        return [
+            'avg_pace' => $avg_pace ?? null,
+            'avg_pace_unit' => $this->avg_pace_unit ?? null,
+            'avg_pace_code' => $avg_pace_code ?? null
+        ];
+    }
+
+    public function averageHeartRate($exercises)
+    {
+        $average_heart_rate = 0;
+
+        # A) Record the Average Heart Rate value recorded from the exercise watch (polar, apple watch, fitbit, garmin). (if available)
+        // $average_heart_rate_code = "A";
+
+        if ($average_heart_rate == 0) {
+            # B) If user is not using any third party heart rate monitor, Average Heart Rate will show ‘-’.
+            $average_heart_rate = 0;
+            $average_heart_rate_code = "B";
+        }
+
+        return [
+            'average_heart_rate' => $average_heart_rate ?? 0,
+            'average_heart_rate_code' => $average_heart_rate_code ?? null,
+        ];
+    }
+
+    public function calculateAveragePower($exercises)
+    {
+        $average_power = 0;
+
+        $isWatt = isset($exercises[0]['watt']);
+
+        # A) Record the Average Power value recorded from the power meter (if available).
+        // $average_power_code = "A";
+
+        if ($average_power == 0 && $isWatt) {
+            # B) For ‘Start’ use OR if the user click on the ‘Complete’ button to log the workout, use
+            # equation (if user use ‘Watt’ in the training log):
+            # Step 1) Add all the Watt values in the training log to get ‘total watt’.
+            # Step 2) Divide the ‘total watt’ by the number of ‘total laps’ in the training log to get the Average Watt
+            $average_power = collect($exercises)->avg('watt');
+            $average_power_code = "B";
+        }
+        if ($average_power == 0 && !$isWatt) {
+            # C) If user is not using ‘Watt’ in the training log, Average Power will show ‘-‘.
+            $average_power = 0;
+            $average_power_code = "C";
+        }
+
+        return [
+            'average_power' => $average_power ?? 0,
+            'average_power_unit' => $this->average_power_unit  ?? 0,
+            'average_power_code' => $average_power_code ?? null,
+        ];
+    }
+
+    /**
+     * calculateLevel
+     *
+     * @param  mixed $exercises
+     * @return void
+     */
+    public function calculateLevel($exercises)
+    {
+        $level = 0;
+        $isLvl = isset($exercises[0]['lvl']);
+        if ($isLvl) {
+            # A) Find Lvl with equation:
+            # Step 1) Total Lvl = Add all the Lvl value(s) in the training log.
+            # Step 2) Lvl = Total Lvl  Total lap(s)
+            $level = collect($exercises)->avg('lvl');
+            $level_code = "A";
+        } else {
+            $level = '-';
+            $level_code = "B";
+        }
+        return [
+            'level' => $level ?? 0,
+            'level_code' => $level_code ?? null,
+        ];
+    }
+
+    public function calculateAverageRPM($exercises)
+    {
+        $avg_rpm = 0;
+        $isRPM = $exercises[0]['rpm'];
+
+        # A) Record the Average Power value recorded from the power meter (if available).
+        $avg_rpm_code = 'A';
+
+        if ($avg_rpm == 0 && $isRPM) {
+            # B) For ‘Start’ use OR if the user click on the ‘Complete’ button to log the workout, use
+            # equation (if user use ‘RPM’ in the training log):
+            # Step 1) Total RPM = Add all the RPM value(s) in the training log.
+            # Step 2) RPM = Total RPM  Total lap(s)  
+            $avg_rpm =  collect($exercises)->avg('rpm');
+            $avg_rpm_code = 'B';
+        } elseif ($avg_rpm == 0 && !$isRPM) {
+            # C) If user is not using ‘RPM’ in the training log, Average RPM will show ‘-‘.
+            $avg_rpm = '-';
+            $avg_rpm_code = 'C';
+        }
+        return [
+            'avg_rpm' => $avg_rpm ?? 0,
+            'avg_rpm_code' => $avg_rpm_code ?? null,
         ];
     }
 }

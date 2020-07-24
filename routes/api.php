@@ -34,6 +34,7 @@ $router->group([/* 'prefix' => 'api' */], function () use ($router) {
 
             $router->get('log-cardio-validation-list', "TrainingLogController@listOfLogCardioValidations");
 
+
             /**
              * training log related routes
              */
@@ -128,6 +129,7 @@ $router->group([/* 'prefix' => 'api' */], function () use ($router) {
             $router->post('load-center-create', "LoadCenterController@store");
             $router->get('load-center-event-show/{id}', "LoadCenterController@eventShow");
             $router->get('load-center-request-show/{id}', "LoadCenterController@requestShow");
+            $router->put('load-center-request-update/{id}', "LoadCenterController@updateRequest");
             $router->get('load-center-show/{id}', "LoadCenterController@show");
             $router->post('load-center-update', "LoadCenterController@update");
             $router->delete('load-center-request-delete/{id}', "LoadCenterController@destroyRequest");

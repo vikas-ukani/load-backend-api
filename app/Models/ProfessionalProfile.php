@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Supports\DateConvertor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Validator;
 
 class ProfessionalProfile extends Model
 {

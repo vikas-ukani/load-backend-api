@@ -214,13 +214,28 @@ class LoadCenterController extends Controller
      *
      * @param mixed $input
      *
-     * @return void
+     * @return mixed
      */
     public function loadCenterListing($input = null)
     {
+        $userAccountTypeCode = Auth::user()->account_detail->code;
+        /** only Professional User can see all of the request. But Not their own. 
+         * For Professional to see their Own request, he needs to switch the view to Premium User 
+         */
+        // $userAccountTypeCode = 'PROFESSIONAL'; // Testing purpose only
+        if ($userAccountTypeCode == ACCOUNT_TYPE_PROFESSIONAL) {
+            $userID = $this->userId;
+        } else {
+            $userID = null;
+        }
         $requestInput = [
-            'list' => ["id", 'user_id', 'title', "specialization_ids", "start_date", "yourself", "training_type_ids"]
+            'list' => ["id", 'user_id', 'country_id', 'title', "specialization_ids", "start_date", "yourself", "training_type_ids"],
+            'relation' => ['country_detail'],
+            'country_detail_list' => ['id', 'name']
         ];
+        if (isset($userID)) $requestInput['expect_user_ids'] = [$userID];
+        // dd('asd', $userAccountTypeCode, $userID, $requestInput);
+
         /** get Event Request Listing */
         $loadCenterRequests = $this->loadCenterRequestRepository->getDetailsByInput($requestInput);
         $response['request_list'] = $loadCenterRequests ?? [];
@@ -240,7 +255,7 @@ class LoadCenterController extends Controller
                     $list['user_detail'] = $this->usersRepositoryEloquent->getDetailsByInput([
                         'id' => $list['user_id'],
                         'first' => true,
-                        'list' => ['name', "photo"]
+                        'list' => ['id', 'name', "photo"]
                     ])->toArray();
                 }
                 return $list;
@@ -315,6 +330,7 @@ class LoadCenterController extends Controller
                     $requestInput['expect_user_ids'] = $snoozedUserIds;
                 }
 
+                if (is_array($requestInput['expect_user_ids'])) array_push($requestInput['expect_user_ids'], $this->userId);
                 /** get professional profile details */
                 $data = $this->professionalProfileRepository->getDetailsByInput(
                     $requestInput
@@ -463,6 +479,25 @@ class LoadCenterController extends Controller
     }
 
     /**
+     * updateRequest
+     *
+     * @param  mixed $request
+     * @param  mixed $id
+     * @return void
+     */
+    public function updateRequest(Request $request, $id)
+    {
+        $input = $request->all();
+        /** create load center request */
+        $response = $this->createUpdateLoadCenterRequestFn($input, $id);
+        /** check any error here */
+        if (isset($response) && $response['flag'] === false) {
+            return $this->sendBadRequest(null, $response['message']);
+        }
+        return $this->sendSuccessResponse($response['data'], $response['message']);
+    }
+
+    /**
      * createLoadCenterEventFn => create an event
      *
      * @param mixed $input
@@ -521,22 +556,16 @@ class LoadCenterController extends Controller
             return $this->makeError(null, $validation->errors()->first());
         }
 
-        $isAlreadyTwoRequested = $this->loadCenterRequestRepository->getDetailsByInput([
-            'user_id' => $input['user_id'] ?? $this->userId,
-            'is_count' => true
-        ]);
-
-        if (isset($isAlreadyTwoRequested) && $isAlreadyTwoRequested >= 2) {
-            return $this->makeError(null, __('validation.common.can_not_create_request_for_two_times_only', ['number' => $isAlreadyTwoRequested]));
+        if ($id == null) {
+            $isAlreadyTwoRequested = $this->loadCenterRequestRepository->getDetailsByInput([
+                'user_id' => $input['user_id'] ?? $this->userId,
+                'is_count' => true
+            ]);
+            if (isset($isAlreadyTwoRequested) && $isAlreadyTwoRequested >= 2) {
+                return $this->makeError(null, __('validation.common.can_not_create_request_for_two_times_only', ['number' => $isAlreadyTwoRequested]));
+            }
         }
-
-        $loadCenterEvent = $this->loadCenterRequestRepository->updateOrCreate(
-            [
-                'id' => $id
-            ],
-            $input
-        );
-
+        $loadCenterEvent = $this->loadCenterRequestRepository->updateOrCreate(['id' => $id],  $input);
         return $this->makeResponse(
             $loadCenterEvent->fresh(),
             !!$id
@@ -556,7 +585,8 @@ class LoadCenterController extends Controller
         $loadCenterRequest = $this->loadCenterRequestRepository->getDetailsByInput(
             [
                 'id' => $id,
-                'relation' => ['user_detail'],
+                'relation' => ['user_detail', 'country_detail'],
+                'country_detail_list' => ['id', 'name'],
                 'first' => true
             ]
         );

@@ -165,4 +165,24 @@ trait DateConvertor
         $date = $date->toDateTimeString();
         return $date;
     }
+
+    /**
+     * getAgeFromDateOfBirth => age from date 
+     *
+     * @param  mixed $date_of_birth => 02-01-1996
+     * @return int
+     */
+    public function getAgeFromDateOfBirth($date_of_birth)
+    {
+        $ageYearDate = Carbon::parse(
+            $date_of_birth,
+            env('APP_TIMEZONE')
+        );  // , 'UTC'
+        $ageYear = $ageYearDate->year;
+        $currentYear = $this->getCurrentYear();
+
+        return $currentYear - $ageYear;
+        // dd('current year of ', $currentYear, $ageYear, $date_of_birth, $currentYear - $ageYear);
+        // return 0; 
+    }
 }

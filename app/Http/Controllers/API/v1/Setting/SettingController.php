@@ -72,9 +72,16 @@ class SettingController extends Controller
         return $this->getSettingProgram();
     }
 
+    /**
+     * createORUpdateSettingProgram => Create and update Setting Program
+     *
+     * @param  mixed $input
+     * @param  mixed $userId
+     * @return void
+     */
     public function createORUpdateSettingProgram($input, $userId)
     {
-        $userId = $userId ?? Auth::id();
+        // $userId = $userId ?? Auth::id();
         return $this->settingTrainingRepository->updateOrCreate(
             [
                 'user_id' => $userId
@@ -157,7 +164,7 @@ class SettingController extends Controller
     /**
      * getSettingPremium => get premium details
      *
-     * @return void
+     * @return object
      */
     public function getSettingPremium()
     {

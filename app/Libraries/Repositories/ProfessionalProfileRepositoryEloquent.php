@@ -89,7 +89,7 @@ class ProfessionalProfileRepositoryEloquent extends BaseRepository implements Us
 
         if (isset($input['language_ids']) && is_array($input['language_ids']) && count($input['language_ids'])) {
             $value = $value->where(function ($query) use ($input) {
-                $query = $query->where('languages_spoken_ids', "LmpsoerIKE", "%" . implode(',', $input['language_ids']) . "%")
+                $query = $query->where('languages_spoken_ids', "LIKE", "%" . implode(',', $input['language_ids']) . "%")
                     ->orWhere('languages_written_ids', "LIKE", "%" . implode(',', $input['language_ids']) . "%");
                 // $query = $query->whereInRaw("find_in_set(" . $input['language_ids'] .  ",languages_spoken)")
                 //     ->orWhereInRaw("find_in_set(" . $input['language_ids'] .  ",languages_written_ids)");

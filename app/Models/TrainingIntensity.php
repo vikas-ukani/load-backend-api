@@ -19,6 +19,8 @@ class TrainingIntensity extends Model
         'code', // code from name
         'sequence', // sequence wise listing
         'target_hr', // targeted hr 
+        'time_to_complete_1_rep_in_second', // Use in Setting Training.
+        'tempo', // Use in Setting Training.
         'is_active', // Account is active or deactivate
     ];
 

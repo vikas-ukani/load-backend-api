@@ -75,6 +75,9 @@ class SettingTrainingRepositoryEloquent extends BaseRepository implements UsersR
         if (isset($input['hr_max'])) {
             $value = $value->where('hr_max', $input['hr_max']);
         }
+        if (isset($input['hr_rest'])) {
+            $value = $value->where('hr_rest', $input['hr_rest']);
+        }
 
         if (isset($input['height'])) {
             $value = $value->where('height', $input['height']);

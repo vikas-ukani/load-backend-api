@@ -42,6 +42,7 @@ class SummaryCalculationController extends Controller
 
         # 2 Get all Information
         $summaryResponse['id'] = $trainingLog['id'];
+        $summaryResponse['user_detail'] = $trainingLog['user_detail'] ?? null;
         $summaryResponse['training_activity'] = $trainingLog['training_activity'] ?? null;
         $summaryResponse['training_goal'] = $trainingLog['training_goal'] ?? null;
         $summaryResponse['training_goal_custom'] = $trainingLog['training_goal_custom'] ?? null;
@@ -83,9 +84,9 @@ class SummaryCalculationController extends Controller
         return $this->sendSuccessResponse($summaryResponse, __('validation.common.details_found', ['module' => "Summary"]));
     }
 
-    public function getTrainingLogDetails($id)
+    public function getTrainingLogDetails($id, $is_completed = true)
     {
-        $trainingLog = $this->trainingLogRepository->getDetailsByInput([
+        $logRequest = [
             'id' => $id,
             'relation' => [
                 'training_activity',
@@ -94,14 +95,18 @@ class SummaryCalculationController extends Controller
                 'training_log_style',
                 'user_detail',
             ],
-            'training_activity_list' => ['id', "name", 'code'],
+            'training_activity_list' => ['id', "name", 'code', 'icon_path', 'icon_path_red', 'icon_path_white'],
             'training_goal_list' => ['id', "name", 'code', 'target_hr'],
             'training_intensity_list' => ['id', "name", 'code', 'target_hr'],
             'training_log_style_list' => ['id', "name", 'code', 'mets'],
-            'user_detail_list' => ['id', "name", 'weight', 'height'],
-            "is_complete" => true,
+            'user_detail_list' => ['id', "name", "photo", 'weight', 'height', 'date_of_birth', 'gender'],
+            // "is_complete" => $is_completed,
             'first' => true
-        ]);
-        return $trainingLog;
+        ];
+        if ($is_completed == true) {
+            $logRequest['is_complete'] = $is_completed;
+        }
+        return  $this->trainingLogRepository->getDetailsByInput($logRequest);
+        // return $trainingLog;
     }
 }

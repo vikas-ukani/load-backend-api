@@ -32,7 +32,7 @@ class LogCardioValidations extends Model
         'training_activity_id'          =>  'integer',
         'training_goal_id'              =>  'integer',
     ];
- 
+
     /**
      * rules => set validation rules
      *
@@ -86,12 +86,11 @@ class LogCardioValidations extends Model
         parent::boot();
 
         // static::creating(function ($model) {
-            //            $model->name = ucwords(strtolower($value));
+        //            $model->name = ucwords(strtolower($value));
         // });
 
         // static::updating(function ($model) {
-            //            $model->name = ucwords(strtolower($value));
+        //            $model->name = ucwords(strtolower($value));
         // });
     }
-  
 }

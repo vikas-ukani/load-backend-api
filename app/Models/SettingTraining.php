@@ -21,10 +21,22 @@ class SettingTraining extends Model
         'user_id', // Which user id can store it.
         'training_unit_ids',
         'hr_max', // HR max
+        'hr_rest', // HR max
         'height', // height
         'weight', // weight
         'race_distance_id', // rom race distance table id
         'race_time', // race time
+
+        /** bike settings */
+        'bike_weight', // bike_weight
+        'bike_wheel_diameter', // bike_wheel_diameter
+        'bike_front_chainwheel', // bike_front_chainwheel
+        'bike_rear_freewheel', // bike_rear_freewheel
+        'physical_activity_level', // bike_rear_freewheel
+
+        /** Time Under tension */
+        'training_intensity_id', // bike_rear_freewheel
+
     ];
 
     /**
@@ -52,6 +64,7 @@ class SettingTraining extends Model
         return [
             // 'user_id' => 'required|unique:setting_trainings,code,' . $id,
             // 'hr_max' => 'required',
+            // 'hr_rest' => 'required',
             // 'height' => 'required',
             // 'race_distance_id' => 'required',
             // 'race_time' => 'required',
@@ -81,13 +94,13 @@ class SettingTraining extends Model
         static::retrieved(function ($value) {
             /** calculate hr_max for User Setting to show in  setting module. */
             $user = \Auth::user();
-            $currentYear = (int)\Carbon\Carbon::now()->year;
+            $currentYear = (int) \Carbon\Carbon::now()->year;
             $dobArray = explode('-', $user->date_of_birth);
             $birthYear = end($dobArray);
-            $age = $currentYear - (int)$birthYear;
-            $hrMax = (206.9 - (0.67 * (float)($age)));
-            $hrMax = (string)round($hrMax, 1);
-            $value->hr_max = (int)$hrMax;
+            $age = $currentYear - (int) $birthYear;
+            $hrMax = (206.9 - (0.67 * (float) ($age)));
+            $hrMax = (string) round($hrMax, 1);
+            $value->hr_max = (int) $hrMax;
         });
     }
 

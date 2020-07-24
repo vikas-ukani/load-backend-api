@@ -16,12 +16,13 @@ class TrainingActivity extends Model
      * @var array
      */
     protected $fillable = [
-        'name', /**  name */
-        'code', /**  code unique */
-        'icon_path', /** activity icon image path */
-        'icon_path_red', /** activity icon red image path */
-        'sequence', /** sequence wise list */
-        'is_active', /** Account is active or deactivate */
+        'name', // name  
+        'code', // code unique 
+        'icon_path', // activity icon image path
+        'icon_path_red', // activity icon red image path  
+        'icon_path_white', // activity icon white image path  
+        'sequence', // sequence wise list  
+        'is_active', // Account is active or deactivate  
     ];
 
     /**

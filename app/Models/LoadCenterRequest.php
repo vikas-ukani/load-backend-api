@@ -1,4 +1,6 @@
-<?php /** @noinspection ALL */
+<?php
+
+/** @noinspection ALL */
 
 namespace App\Models;
 
@@ -97,10 +99,10 @@ class LoadCenterRequest extends Model
      *
      * @return void
      */
-    public function setStartDateAttribute($value)
-    {
-        $this->attributes['start_date'] = $this->isoToUTCFormat($value);
-    }
+    // public function setStartDateAttribute($value)
+    // {
+    //     $this->attributes['start_date'] = $this->isoToUTCFormat($value);
+    // }
 
     /**
      * setStartDateAttribute => convert to iso to UTC formate
@@ -109,10 +111,10 @@ class LoadCenterRequest extends Model
      *
      * @return void
      */
-    public function setBirthDateAttribute($value)
-    {
-        $this->attributes['birth_date'] = $this->isoToUTCFormat($value);
-    }
+    // public function setBirthDateAttribute($value)
+    // {
+    //     $this->attributes['birth_date'] = $this->isoToUTCFormat($value);
+    // }
 
     /**
      * setTrainingTypeIdsAttribute => set array to string
@@ -190,5 +192,15 @@ class LoadCenterRequest extends Model
     public function training_type_details()
     {
         return $this->hasOne(TrainingTypes::class, 'id', 'user_id');
+    }
+
+    /**
+     * country_detail =>  country wise detail
+     *
+     * @return void
+     */
+    public function country_detail()
+    {
+        return  $this->hasOne(Countries::class, 'id', 'country_id');
     }
 }

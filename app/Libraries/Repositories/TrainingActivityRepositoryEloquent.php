@@ -153,7 +153,7 @@ class TrainingActivityRepositoryEloquent extends BaseRepository implements Users
      *
      * @param  mixed $input
      *
-     * @return void
+     * @return object
      */
     public function getDetailsByInput($input = null)
     {
