@@ -34,6 +34,7 @@ class TrainingLog extends Model
         'is_log', // if true then show log else show workouts only
         'latitude', // log latitude
         'longitude', // log longitude
+        'outdoor_route_data', // storing outdoor user activity route data.
         'generated_calculations', // Store Json type after completed training log to summary page
         'comments', // text User Can leave comment here
         'is_complete', // User Complete this training log exercise

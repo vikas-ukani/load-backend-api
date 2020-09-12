@@ -22,6 +22,8 @@ class SettingTraining extends Model
         'training_unit_ids',
         'hr_max', // HR max
         'hr_rest', // HR max
+        'run_auto_pause',
+        'cycle_auto_pause',
         'height', // height
         'weight', // weight
         'race_distance_id', // rom race distance table id
@@ -37,6 +39,12 @@ class SettingTraining extends Model
         /** Time Under tension */
         'training_intensity_id', // bike_rear_freewheel
 
+    ];
+
+    /** for casting tiny integer to boolean values. */
+    protected $casts = [
+        'run_auto_pause' => 'boolean',
+        'cycle_auto_pause' => 'boolean'
     ];
 
     /**
@@ -117,7 +125,10 @@ class SettingTraining extends Model
     }
 
     /**
-     * @param $value
+     * setTrainingUnitIdsAttribute
+     *
+     * @param  mixed $value
+     * @return void
      */
     public function setTrainingUnitIdsAttribute($value)
     {
@@ -131,8 +142,10 @@ class SettingTraining extends Model
     }
 
     /**
-     * @param $value
-     * @return array|null
+     * getTrainingUnitIdsAttribute
+     *
+     * @param  mixed $value
+     * @return void
      */
     public function getTrainingUnitIdsAttribute($value)
     {

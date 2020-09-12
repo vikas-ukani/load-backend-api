@@ -28,9 +28,9 @@ class LogCardioValidations extends Model
     ];
 
     protected $casts = [
-        'is_active'                     =>  'boolean',
-        'training_activity_id'          =>  'integer',
-        'training_goal_id'              =>  'integer',
+        'is_active' =>  'boolean',
+        'training_activity_id' =>  'integer',
+        'training_goal_id' =>  'integer',
     ];
 
     /**

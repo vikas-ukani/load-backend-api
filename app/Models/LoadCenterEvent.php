@@ -224,7 +224,7 @@ class LoadCenterEvent extends Model
      * @param  mixed $input
      * @param  mixed $id
      *
-     * @return void
+     * @return object
      */
     public static function validation($input, $id = null)
     {
