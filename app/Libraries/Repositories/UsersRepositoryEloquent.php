@@ -232,7 +232,7 @@ class UsersRepositoryEloquent extends BaseRepository implements UsersRepository
      *
      * @param  mixed $input
      *
-     * @return void
+     * @return object
      */
     public function getDetailsByInput($input = null)
     {

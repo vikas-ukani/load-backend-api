@@ -179,44 +179,6 @@ class TrainingProgramController1 extends Controller
             $todaysProgramExercise['common_programs_weeks_laps_details'] = $this->callHelperControllerCalculation($todaysProgramExercise);
             return $this->sendSuccessResponse($todaysProgramExercise, __('validation.common.key_already_exist', ['key' => $this->moduleName]));
         }
-        // dd('create here', $todaysProgramExercise);
-
-        //** NOTE  DO NOT REMOVE THIS CODE */
-        /** get given date wise ( start of the week ) and ( end of the week )  */
-        // $dateWiseStartOfTheWeek = $this->getDateWiseStartOfTheWeek($input['start_date']);
-        // $dateWiseEndOfTheWeek = $this->getDateWiseEndOfTheWeek($input['end_date']);
-
-        # 2. check in current week if data exists then
-        // $currentWeeksProgramExercise = $this->completedTrainingProgramRepository->getDetailsByInput(
-        //     [
-        //         'program_id' => $input['program_id'],
-        //         'start_date' => $dateWiseStartOfTheWeek,
-        //         'end_date' => $dateWiseEndOfTheWeek,
-        //         'sort_by' => ['common_programs_weeks_id', 'desc'],
-        //         'first' => true
-        //     ]
-        // );
-
-        /** if found this week then select common current week id */
-        // if (isset($currentWeeksProgramExercise)) {
-        //     $input['common_programs_weeks_id'] = $currentWeeksProgramExercise->common_programs_weeks_id;
-        // } else {
-        //     $dateWisePreviousStartOfTheWeek = $this->getDateWisePreviousStartOfTheWeek($input['start_date']);
-        //     $datePreviousWiseEndOfTheWeek = $this->getDateWisePreviousEndOfTheWeek($input['end_date']);
-
-        //     /** if not found then check previous week for common week id */
-        //     $previousWeeksProgramExercise = $this->completedTrainingProgramRepository->getDetailsByInput(
-        //         [
-        //             'program_id' => $input['program_id'],
-        //             'start_date' => $dateWisePreviousStartOfTheWeek,
-        //             'end_date' => $datePreviousWiseEndOfTheWeek,
-        //             'sort_by' => ['common_programs_weeks_id', 'desc'],
-        //             'first' => true
-        //         ]
-        //     );
-        //     if (isset($previousWeeksProgramExercise)) {
-        //         $input['common_programs_weeks_id'] = $previousWeeksProgramExercise->common_programs_weeks_id;
-        //     } else {
 
         /** get week number from selected date */
         $getSelectedWeekFromProgram = $this->getSelectedWeekNumberFromProgram($dummyInput);

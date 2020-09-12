@@ -91,34 +91,6 @@ class HelperController extends Controller
         $input['speed'] = $this->convertPaceToSpeed($input['pace']);
         $input['vdot_code'] = $this->vdotCode;
 
-        // dd(
-        //     'KM = ' . 1/* $kmNumber[0] */ . ' , DIST = ' . $this->DIST . ', TIME in minutes = ' . $this->T,
-        //     "",
-
-        //     "Step 1 VO2 => -4.6 + 0.182258 * ($this->DIST / $this->T) + 0.000104 * ($this->DIST / $this->T) * ($this->DIST / $this->T) ",
-        //     "ANS of Step 1 => $this->VO2 ",
-        //     "",
-
-        //     "Step 2  Percent MAX  => 0.8 + 0.1894393 * exp(-0.012778 * $this->T) + 0.2989558 * exp(-0.1932605 * $this->T)",
-        //     "ANS of Step 2 => $this->PERCENT_MAX ",
-        //     "",
-
-        //     "Step 3  VDOT => $this->VO2 / $this->PERCENT_MAX",
-        //     "ANS of Step 3 => $this->vDOT ",
-        //     "",
-
-        //     "Step 4 TARGET => ( 1000 * 2 * 0.000104) / (-0.182258 + sqrt( (0.182258 * 0.182258) - 4 * 0.000104 * (-4.6 - 0.84 * $this->vDOT) ))",
-        //     "ANS of Step 4 => " . round($this->TARGET, 2),
-        //     "",
-
-        //     "Final Pace " . $input['pace'],
-        //     "Final Speed " . $input['speed'],
-        //     "",
-
-        //     "Input Laps are",
-        //     $input,
-        //     $apiRequest
-        // );
         return $input;
     }
 
@@ -349,7 +321,6 @@ class HelperController extends Controller
                 sqrt(
                     (0.182258 * 0.182258) - 4 * 0.000104 * (-4.6 - 0.88 * $this->vDOT)
                 ));
-                
     }
 
     /**

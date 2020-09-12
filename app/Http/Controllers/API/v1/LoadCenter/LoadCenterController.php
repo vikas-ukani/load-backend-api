@@ -365,6 +365,12 @@ class LoadCenterController extends Controller
         return $this->makeResponse($response, __('validation.common.details_found', ['module' => $this->moduleList]));
     }
 
+    /**
+     * getProfessionalUserProfileListByInput
+     *
+     * @param  mixed $request
+     * @return void
+     */
     public function getProfessionalUserProfileListByInput(Request $request)
     {
         $input = $request->all();
@@ -406,6 +412,12 @@ class LoadCenterController extends Controller
         return $this->makeResponse($list, __('validation.common.details_found', ['module' => $this->moduleEvent]));
     }
 
+    /**
+     * getEventTypeList
+     *
+     * @param  mixed $request
+     * @return void
+     */
     public function getEventTypeList(Request $request)
     {
         $eventType = $this->eventTypeRepository->getDetailsByInput([
@@ -528,16 +540,6 @@ class LoadCenterController extends Controller
                 ? __("validation.common.updated", ["module" => $this->moduleEvent])
                 : __("validation.common.created", ["module" => $this->moduleEvent])
         );
-
-        /** if id found then update it else create new load event */
-        // if (!!$id) {
-        //     dd('update');
-        // } else {
-
-        //     // create event store
-        //     $loadCenterEvent = $this->loadCenterEventRepository->create($input);
-        //     return $this->makeResponse($loadCenterEvent, __("validation.common.created", ["module" => $this->moduleEvent]));
-        // }
     }
 
     /**

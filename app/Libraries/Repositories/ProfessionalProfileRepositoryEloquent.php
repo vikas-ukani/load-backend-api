@@ -163,7 +163,7 @@ class ProfessionalProfileRepositoryEloquent extends BaseRepository implements Us
      *
      * @param  mixed $input
      *
-     * @return void
+     * @return object
      */
     public function getDetailsByInput($input = null)
     {

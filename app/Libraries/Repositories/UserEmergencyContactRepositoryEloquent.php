@@ -118,6 +118,12 @@ class UserEmergencyContactRepositoryEloquent extends BaseRepository implements U
         ];
     }
 
+    /**
+     * getDetailsByInput
+     *
+     * @param  mixed $input
+     * @return void
+     */
     public function getDetailsByInput($input = null)
     {
         $value = $this->makeModel();

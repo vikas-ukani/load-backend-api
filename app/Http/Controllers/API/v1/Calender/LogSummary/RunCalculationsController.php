@@ -18,6 +18,12 @@ class RunCalculationsController extends Controller
     protected $gradient_unit;
     protected $avg_speed_unit;
 
+    /**
+     * __construct => initially called
+     * 
+     *
+     * @return void
+     */
     public function __construct()
     {
         $this->total_distance_unit = "km";
@@ -28,7 +34,10 @@ class RunCalculationsController extends Controller
     }
 
     /**
-     * RUN ( IN | OUT )
+     * generateRunCalculation =>  RUN ( IN | OUT )
+     *
+     * @param  mixed $trainingLog
+     * @return void
      */
     public function generateRunCalculation($trainingLog)
     {
@@ -38,37 +47,6 @@ class RunCalculationsController extends Controller
         $isDuration = $trainingLog['exercise'][0]['duration'];
 
         $response = [];
-
-        #  Calculate Distance By Given Start Lat-Long  and END lat-long
-        # START Total Distance 
-        /** get first from generated calculation */
-        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['total_distance'])) {
-            $response = array_merge($response, [
-                'total_distance' => $trainingLog['generated_calculations']['total_distance'],
-                'total_distance_unit' =>  $this->total_distance_unit
-            ]);
-        } else {
-            $calculateTotalDistance = $this->calculateTotalDistance(
-                $trainingLog,
-                $activityCode,
-                $isDuration
-            );
-            $response = array_merge($response, $calculateTotalDistance);
-        }
-        # END Total Distance 
-
-        /** If there are more than 1 inclination value in the log,
-         * for example, 2 laps and 1 lap is set to 1% and another lap is set to 3%,
-         * we will take an average of that. Meaning (1+3)/2 = 2% 
-         */
-        $numberOfLaps = count($trainingLog['exercise']);
-        if ($numberOfLaps == 1) {
-            $response['inclination'] = round(($trainingLog['exercise'][0]['percentage']), 2);
-        } else {
-            $svgInclination = collect($trainingLog['exercise'])->avg('percentage');
-            $response['inclination'] = round(($svgInclination), 2);
-            // $response['inclination'] = round(($svgInclination / 100), 2);
-        }
 
         # START Total Duration 
         /** get first from generated calculation */
@@ -85,12 +63,36 @@ class RunCalculationsController extends Controller
         }
         # END Total Duration 
 
+        # Calculate Active Duration and Minutes
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            $deActiveDuration = $trainingLog['exercise'][0]['deactive_duration']  ?? 0;
+            $calculateActiveDuration = $this->calculateActiveDuration($response['total_duration_minutes'], $deActiveDuration);
+            $response = array_merge($response, $calculateActiveDuration);
+        }
+
+        # Calculate Distance By Given Start Lat-Long  and END lat-long
+        # START Total Distance
+        /** get first from generated calculation */
+        if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['total_distance'])) {
+            $response = array_merge($response, [
+                'total_distance' => $trainingLog['generated_calculations']['total_distance'],
+                'total_distance_unit' =>  $this->total_distance_unit
+            ]);
+        } else {
+            $calculateTotalDistance = $this->calculateTotalDistance(
+                $trainingLog,
+                $activityCode,
+                $isDuration
+            );
+            $response = array_merge($response, $calculateTotalDistance);
+        }
+        # END Total Distance 
 
         # START Average Speed (can be either km/hr OR mile/hr, depending on the unit setting) 
         /** get first from generated calculation */
         if (isset($trainingLog['generated_calculations'], $trainingLog['generated_calculations']['avg_speed'])) {
             $response = array_merge($response, [
-                'avg_speed' => $trainingLog['generated_calculations']['avg_speed'],
+                'avg_speed' => round($trainingLog['generated_calculations']['avg_speed'], 1),
                 'avg_speed_unit' => $this->avg_speed_unit
             ]);
         } else {
@@ -103,7 +105,6 @@ class RunCalculationsController extends Controller
             $response = array_merge($response, $calculateAverageSpeed);
         }
         # END Average Speed
-
 
         # 3. START Average Pace 
         /** get first from generated calculation */
@@ -123,13 +124,22 @@ class RunCalculationsController extends Controller
         }
         # 3. END Average Pace 
 
+        /** If there are more than 1 inclination value in the log,
+         * for example, 2 laps and 1 lap is set to 1% and another lap is set to 3%,
+         * we will take an average of that. Meaning (1+3)/2 = 2% 
+         */
+        $numberOfLaps = count($trainingLog['exercise']);
+        if ($numberOfLaps == 1) {
+            $response['inclination'] = round(($trainingLog['exercise'][0]['percentage']), 2);
+        } else {
+            $svgInclination = collect($trainingLog['exercise'])->avg('percentage');
+            $response['inclination'] = round(($svgInclination), 2);
+        }
+
         # Start Elevation Gain
         $calculateElevationGain = $this->calculateElevationGain(
             $trainingLog['exercise'],
             $activityCode
-            // $response['total_distance'],
-            // $response['total_duration_minutes'],
-
         );
         $response = array_merge($response, $calculateElevationGain);
         # End Elevation Gain
@@ -144,183 +154,18 @@ class RunCalculationsController extends Controller
         $response = array_merge($response, $calculateGradient);
         # End Gradient (%)
 
-        /** Step 1 (Find m/min):
-         * Using the average speed (km/hr or miles/ hr), 
-         * convert it to m/min using one of the equation (depending on user’s unit setting):
-         *      a. m/min = speed in km/hr x 16.7
-         *      b. m/min = speed in miles/hr x 26.8 
-         */
-        $m_min = $response['avg_speed'] * 16.7;
-
-        /** Step 2 (Find VO2):
-         * VO2 = (0.2 x speed) + (0.9 x speed x *inclination) + 3.5 
-         * *Inclination of 1% = 0.01
-         */
-        // $inclination = round(($response['inclination'] / 100), 2); // OLD
-        // $VO2 = (0.2 * $m_min) + (0.9 * $m_min *  $inclination) + 3.5; // OLD 
-        $VO2 = (0.2 * $m_min) + (0.9 * $m_min *  ($response['gradient'] / 100)) + 3.5; // NEW
-        $response['VO2'] = $VO2 = round($VO2, 2);
-
-        /** Step 3 (Find MET value): 
-         * MET = VO2 / 3.5 
-         */
-        $response['MET'] = $MET = round(($VO2 / 3.5), 2);
-
-        /** Step 4 (Find kcal/min):
-         * kcal/min = (MET x 3.5 x body mass in kg) / 200 
-         */
-        $response['BMI'] = $BMI = round(((($trainingLog['user_detail']['weight'] ?? 0) / ($trainingLog['user_detail']['height'] ?? 0)  / ($trainingLog['user_detail']['height'] ?? 0)) * 10000), 2);
-        $response['kcal_min'] = $kcal_min = round((($MET * 3.5 * $BMI) / 200), 2);
-
-        /** Step 5 (Final total kcal):
-         * Total kcal = (kcal/min) x total duration in mins 
-         */
-        $response['total_kcal'] = round(($kcal_min * $response['total_duration_minutes']), 2);
-        // dd('check All Counts ', "total_kcal", $response['total_kcal'],  "BMI", $BMI, "kcal_min", $kcal_min,  "MET ", $MET,  $response['VO2'], "m_min", $m_min, "inclination",  $response['inclination']);
+        # start Total kcal
+        $calculateTotalKcal = $this->calculateTotalKcal(
+            $trainingLog['exercise'],
+            $response['avg_speed'],
+            $response['gradient'],
+            $trainingLog['user_detail']['weight'],
+            $response['total_duration_minutes']
+        );
+        $response = array_merge($response, $calculateTotalKcal);
+        # end Total kcal
 
         return $response;
-    }
-
-    public function findTotalDistanceUsingDuration($exercises)
-    {
-        $allDuration = 0;
-        foreach ($exercises as $key => $exercise) {
-
-            if (isset($exercise['pace'], $exercise['duration'])) {
-                /** convert pace to seconds */
-                /** 
-                 * Step 1 - Convert Pace timing to seconds
-                 * Lap 1 Pace timing to seconds → 6 x 60 = 360
-                 */
-                $paceToSpeedArray = explode(':', $exercise['pace']);
-                $paceToSpeed = ($paceToSpeedArray[0] * 60) + $paceToSpeedArray[1];
-
-                /**
-                 * Step 2 – Find Speed
-                 * Lap 1 Speed → (60 x 60)  360 = 10 km/hr
-                 */
-                $totalSpeed = round((60 * 60) / $paceToSpeed, 1);
-
-                /**
-                 * Step 3 – Find Total Duration
-                 * Lap 1 Duration (in hour) → 20 / 60 = 0.3333 (4 decimals place)
-                 * "duration" => "00:20:00"
-                 */
-                $durationArray = explode(':', $exercise['duration']);
-                // $totalDuration = round((($durationArray[1]) / 60), 4);
-                $totalDuration = round(
-                    (int) $durationArray[0]
-                        + ((int) $durationArray[1] / 60)
-                        + ((int) $durationArray[2] / 3600),
-                    4
-                );
-                //                     ($durationArray[1] ?? 0) + (($durationArray[1]) / 60) + (($durationArray[2] ?? 0) / 60),
-                // dd('minute ', $totalDuration, $durationArray, (int) $durationArray[0], ((int) $durationArray[1] / 60), ((int) $durationArray[2] / 60));
-                /**
-                 * Step 4 – Find Distance
-                 * Lap 1 Distance → 0.3333 x 10 = 3.333 = 3.30km (2 decimals place)
-                 */
-                $distanceByDurationPace[] = round(($totalDuration * $totalSpeed), 2);
-
-                // dd(
-                //     'Check ',
-                //     "Total duration = " . $exercise['duration'],
-                //     "Total Pace = " . $exercise['pace'],
-                //     $paceToSpeed,
-                //     $totalSpeed,
-                //     $totalDuration,
-                //     $distanceByDurationPace
-                // );
-            }
-            if (isset($exercise['speed'], $exercise['duration'])) {
-                /**    speed && duration */
-                /**
-                 * Step 1
-                 * Lap 1 Duration in hour → 20 / 60 = 0.3333 (4 decimals place)
-                 */
-                $durationArray = explode(':', $exercise['duration']);
-                // $totalDuration = round((($durationArray[1]) / 60), 4);
-                $totalDuration = round(
-                    (int) $durationArray[0]
-                        + ((int) $durationArray[1] / 60)
-                        + ((int) $durationArray[2] / 3600),
-                    // + ((int) $durationArray[2] / 60),
-                    4
-                );
-                // dd('total duration', $totalDuration, $durationArray);
-
-                /**
-                 * Step 2
-                 * Lap 1 Distance → 0.3333 x 9 = 2.9997 = 3km
-                 */
-                $distanceByDurationSpeed[] = round($totalDuration * ($exercise['speed'] * 1), 4);
-            }
-        }
-
-        if (isset($distanceByDurationSpeed)) {
-            /** SPEED && DURATION
-             * Step 3 – Find Total Distance for all Laps
-             * Total Distance → 3.3 + 4.2 = 7.5 km (SUM OF ALL STEP 4)
-             */
-            // dd('SPEED && DURATION ', $distanceByDurationSpeed,    array_sum($distanceByDurationSpeed));
-            return array_sum($distanceByDurationSpeed);
-        } else if (isset($distanceByDurationPace)) {
-            /** PACE && DURATION
-             * Step 5 – Find Total Distance for all Laps
-             * Total Distance → 3.3 + 4.2 = 7.5 km (SUM OF ALL STEP 4)
-             */
-            // dd('PACE && DURATION', $distanceByDurationPace,    array_sum($distanceByDurationPace));
-            return array_sum($distanceByDurationPace);
-        }
-    }
-    
-    /**
-     * calculateTotalDistance
-     *
-     * @param  mixed $trainingLog
-     * @param  mixed $activityCode
-     * @param  mixed $isDuration
-     * @return void
-     */
-    public function calculateTotalDistance($trainingLog, $activityCode, $isDuration)
-    {
-        # Start Total Distance Calculation ------------------------------------------------------------------------
-        $total_distance = 0;
-
-        /** calculate from App Side Using Watch "B" */
-        $exerciseTotalDistanceArray = collect($trainingLog['exercise'])->whereNotIn('total_distance',  ['0', null, 0])->pluck('total_distance')->all();
-        if (isset($exerciseTotalDistanceArray) && is_array($exerciseTotalDistanceArray) && count($exerciseTotalDistanceArray) > 0) {
-            /** all meter data convert to KM */
-            $total_distance = Arr::first($exerciseTotalDistanceArray);
-            $total_distance = round(($total_distance * 0.001), 2);
-            $total_distance_code = "B";
-        }
-        // dd('Check B Here',  $total_distance, $exerciseTotalDistanceArray,  $trainingLog['exercise']);
-
-        # Apply For "C" 
-        if ($total_distance == 0) {
-            $total_distance_code = "C";
-            $total_distance = $this->findTotalDistanceUsingDuration($trainingLog['exercise']);
-        }
-
-        #  "A" Calculate
-        if ($activityCode == TRAINING_ACTIVITY_CODE_CYCLE_OUTDOOR) {
-            // NOTE - Remain To Test
-            $total_distance = $this->getTotalDistanceFromStartEndLatitudeLongitude($trainingLog);
-            $total_distance_code = "A";
-        }
-
-        # Use D here if all distance is 0  "D"
-        if ($total_distance == 0) {
-            $total_distance_code = "D";
-            $total_distance = collect($trainingLog['exercise'])->sum('distance');
-        }
-        # End Total Distance Calculation  ------------------------------------------------------------------------
-        return [
-            'total_distance' => round($total_distance, 2),
-            'total_distance_unit' =>  $this->total_distance_unit,
-            'total_distance_code' => $total_distance_code
-        ];
     }
 
     /**
@@ -331,52 +176,133 @@ class RunCalculationsController extends Controller
      */
     public function calculateDuration($trainingLog)
     {
+        # Outdoor and Indoor: A, B → C OR D
+
         # Calculate Duration From Exercise using start_time and end_time
         $totalDurationMinute = 0;
-        /** get total_minute from start_time and end_time */
-        $totalDurationMinute = $this->totalDurationMinute($trainingLog);
 
-        /** 
-         * Calculate Total Duration Outdoor and Indoor: A → B → C
-         */
-        if (
-            isset($totalDurationMinute) &&
-            in_array(($totalDurationMinute * 60),
-                range(TRAINING_WORKOUT_STOP_IMMEDIATELY_MIN_SECOND, TRAINING_WORKOUT_STOP_IMMEDIATELY_MAX_SECOND)
-            )
-        ) {
-            /** check minute less then  means immediately stop workout */
-            # C OR D equation
-            $ifDistance = $trainingLog['exercise'][0]['distance'];
-            if (isset($ifDistance)) {
-                # C Use here
-                $totalDurationMinute = $this->calculateDurationCalculationGuid($trainingLog['exercise']);
-                $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0)  * 60)));
-                // dd('final is ', $totalDurationMinute, $response['total_duration']);
-                $totalDurationMinuteCode = "C";
-            } else {
-                # D Use here | all add it together duration 
-                // $totalDurationMinute = $this->addAllDurationTimeFromExercise($trainingLog['exercise']);  // OLD
-                $totalDurationMinute = $this->addAllDurationAndRestTimeFromExercise($trainingLog['exercise']);  // NEW
-                $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0) * 60)));
-                $totalDurationMinuteCode = "D";
-            }
-            // dd('check is duration',$trainingLog['exercise'][0] );
-        } else {
-            # A equation 
-            $response['total_duration'] = (gmdate("H:i:s", (($totalDurationMinute ?? 0) * 60)));
-            $totalDurationMinuteCode = "A";
+        # A) If the user click on the ‘Start’ button, use phone tracker (when user starts the workout log to when the workout log ends).
+        $totalDurationMinute = $this->totalDurationMinute($trainingLog);
+        $isCompleteButton = (bool) ($totalDurationMinute == 0);
+        $totalDurationMinuteCode = "A";
+
+        if (!$isCompleteButton && $totalDurationMinute == 0) {
+            # B) If the user click on the ‘Start’ button, 
+            # record the Total Duration value recorded from the exercise watch (if available).
+            # $totalDurationMinuteCode = "B";
         }
-        $response['total_duration_in_minute'] = $totalDurationMinute;
-        // $response['total_duration'] = ($totalDurationMinute == 0) ? "00:00:00" :(gmdate("H:i:s", (($totalDurationMinute ?? 0) * 60)));
-        // dd('total rpm ', $total_rpm, $trainingLog['exercise']);
+
+        # Client said remove remove this 30 second condition
+        // if (in_array(($totalDurationMinute * 60), range(TRAINING_WORKOUT_STOP_IMMEDIATELY_MIN_SECOND, TRAINING_WORKOUT_STOP_IMMEDIATELY_MAX_SECOND)) ) {
+        $ifDistance = $trainingLog['exercise'][0]['distance'];
+        if ($isCompleteButton && isset($ifDistance)) {
+            # C) If the user click on the ‘Complete’ button to log the workout, use equation 
+            # (If user use ‘Distance’ in the log. Please see Duration Calculation Guide).
+            $totalDurationMinute = $this->calculateDurationCalculationGuid($trainingLog['exercise']);
+            $totalDurationMinuteCode = "C";
+        } else if ($isCompleteButton) {
+            # D) If the user click on the ‘Complete’ button to log the workout, use the duration 
+            # (If user use ‘Duration’ in the log):
+            # Add all the Duration (including Rest) parameters in the log.
+            $totalDurationMinute = $this->addAllDurationAndRestTimeFromExercise($trainingLog['exercise']);  // NEW
+            $totalDurationMinuteCode = "D";
+        }
+        // }
+
         return [
-            'total_duration_minutes' => round($totalDurationMinute, 2),
+            'total_duration_minutes' => round($totalDurationMinute, 1),
             'total_duration' => $this->convertDurationMinutesToTimeFormat($totalDurationMinute),
             'total_duration_code' => $totalDurationMinuteCode,
         ];
     }
-    
+
+    /**
+     * calculateActiveDuration
+     *
+     * @param  mixed $totalDurationMinute
+     * @param  mixed $deActiveDuration
+     * @return void
+     */
+    public function calculateActiveDuration($totalDurationMinute, $deActiveDuration = 0)
+    {
+        $deActiveDurationMinute = ($deActiveDuration ?? 0) / 60; // to convert into minute
+        $totalDurationMinute = round($totalDurationMinute, 2);
+        $deActiveDurationMinute = round($deActiveDurationMinute, 2);
+        $activeDurationMinute = round(($totalDurationMinute - $deActiveDurationMinute), 2);
+
+        return [
+            'active_duration_minutes' => $activeDurationMinute,
+            'active_duration' => $this->convertDurationMinutesToTimeFormat($activeDurationMinute)
+        ];
+    }
+
+    /**
+     * calculateTotalDistance
+     *
+     * @param  mixed $trainingLog
+     * @param  mixed $activityCode
+     * @param  mixed $isDuration
+     * @return void
+     */
+    public function calculateTotalDistance($trainingLog, $activityCode, $isDuration)
+    {
+        # Outdoor: A, C → D OR E
+        # Indoor: B, C → D OR E
+
+        $total_distance = 0;
+
+        $totalDurationMinute = $this->totalDurationMinute($trainingLog);
+        $isCompleteButton = (bool) ($totalDurationMinute == 0);
+
+        # A) If the user click on the ‘Start’ button,
+        # use phone location and motion sensors (GPS + Accelerometer) (only for Outdoor)
+        if (!$isCompleteButton && $activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            $total_distance = $this->getTotalDistanceFromStartEndLatitudeLongitude($trainingLog);
+            $total_distance_code = "A";
+        } else if (!$isCompleteButton && $activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+            # B) If the user click on the ‘Start’ button, 
+            # use phone motion sensor (Accelerometer) (only for Indoor).
+            if (isset($exerciseTotalDistanceArray) && is_array($exerciseTotalDistanceArray) && count($exerciseTotalDistanceArray) > 0) {
+                /** all meter data convert to KM */
+                $total_distance = Arr::first($exerciseTotalDistanceArray); // get from first lap
+                $total_distance = round(($total_distance * 0.001), 1);
+                $total_distance_code = "B";
+            }
+        }
+
+        $lastExerciseTotalDistance = collect($trainingLog['exercise'])->whereNotIn('total_distance', ['0', 0, null])->pluck('total_distance')->first();
+        # C) If the user click on the ‘Start’ button, 
+        # record the Total Distance value recorded from the exercise watch (if available).
+        if (!$isCompleteButton && $total_distance == 0 && isset($lastExerciseTotalDistance)) {
+            $total_distance = $this->getDistanceFromExerciseWatch($lastExerciseTotalDistance); // function in summary controller
+            $total_distance_code = "C";
+        }
+
+        if ($isCompleteButton) {
+            # D) If the user click on the ‘Complete’ button to log the workout, 
+            # use equation (If user use ‘Duration’ in the log. Please see Distance Calculation Guide).
+            if ($total_distance == 0) {
+                $total_distance_code = "D";
+                $total_distance = $this->findTotalDistanceUsingDuration($trainingLog['exercise']);
+            }
+
+            # E) If the user click on the ‘Complete’ button to log the workout, 
+            # use equation (If user use ‘Distance’ in the log):
+            # Add all the Distance parameters in the log.
+            if ($total_distance == 0) {
+                $total_distance_code = "E";
+                $total_distance = collect($trainingLog['exercise'])->sum('distance');
+            }
+        }
+
+        $data = [
+            'total_distance' => round($total_distance, 1),
+            'total_distance_unit' =>  $this->total_distance_unit,
+            'total_distance_code' => $total_distance_code ?? ''
+        ];
+        return $data;
+    }
+
     /**
      * calculateAverageSpeed => calculate average speed updated
      *
@@ -388,49 +314,108 @@ class RunCalculationsController extends Controller
      */
     public function calculateAverageSpeed($exercises, $activityCode, $total_distance, $total_duration_minutes)
     {
-        /** SPEED START ****************************************** */
+        # Outdoor: A, C → D
+        # Indoor: B, C → D
+
         $avg_speed = 0;
-        // $response['avg_speed'] = $totalDurationMinute == 0 ? 0 : round(($response['total_distance'] / $totalDurationMinute), 2);
         $isDuration = $exercises[0]['duration'];
 
-        # C) If the user click on the ‘Complete’ button to log the workout, use equation (Please see
-        // Average Speed Calculation Guide).
-        $avg_speed_code = "C";
-        $avg_speed = $this->calculateAverageSpeedGuide(
-            $exercises,
-            $total_distance,
-            $total_duration_minutes
-        );
+        /** if $totalDurationMinute  is 0 Means *COMPLETE* button clicked */
+        $totalDurationMinute = $this->totalDurationMinute(['exercise' => $exercises]);
+        $isCompleteButton = (bool) ($totalDurationMinute == 0);
 
-        # B) Record the Average Speed value recorded from the exercise watch (if available).
-
-        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
-            # A) Use phone GPS/tracker and apply this equation:
-            // Average Speed = Total Distance (in km) / Total Duration (convert to minutes) (only for Outdoor)
-            $avg_speed = $total_duration_minutes == 0 ? 0 : round(($total_distance / $total_duration_minutes), 2);
+        # A) If the user click on the ‘Start’ button, use phone motion sensor, 
+        # use phone location and motion sensors (GPS + Accelerometer) 
+        # (only for Outdoor)
+        if (!$isCompleteButton &&  $activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            /** use this told by yash */
+            $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
+            // if (isset($avg_pace)) {
+            //     # convert pace to speed
+            //     $avg_speed = (60 / $avg_pace);
+            // }
             $avg_speed_code = "A";
+        }
+        if (!$isCompleteButton &&  $activityCode = TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+            /** use this told by yash */
+            $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            # B) Use phone motion sensor (Accelerometer) (only for Indoor)
+            // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
+            // if (isset($avg_pace)) {
+            //     # convert pace to speed
+            //     $avg_speed = (60 / $avg_pace);
+            // }
+            $avg_speed_code = "B";
+        }
+        $avg_speed = $avg_speed ?? 0;
+        if ($avg_speed == 0) {
+            # C) Record the Average Speed value recorded from the exercise watch (if available).
+            // $avg_speed_code = "C";
+        }
+
+        if ($avg_speed == 0 && $isCompleteButton) {
+            # D) If the user click on the ‘Complete’ button to log the workout, use equation (Please see
+            # Average Speed Calculation Guide).
+            $avg_speed_code = "D";
+            $avg_speed = $this->calculateAverageSpeedGuide(
+                $exercises,
+                $total_distance,
+                $total_duration_minutes
+            );
+        }
+
+        if ($avg_speed == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+            # E) Only for Indoor: If the user click on the ‘Start’ button and if no movement detected,
+            # leave the value empty. Allow the user to key in the value manually (Step 5).
+            $avg_speed_code = "E";
         }
 
         $data = [
-            'avg_speed' =>      round($avg_speed, 2),
-            'avg_speed_unit' =>      $this->avg_speed_unit,
-            'avg_speed_code' =>      $avg_speed_code
+            'avg_speed' => round($avg_speed, 1),
+            'avg_speed_unit' => $this->avg_speed_unit,
+            'avg_speed_code' => $avg_speed_code
         ];
+
         return $data;
     }
 
+    /**
+     * calculateAvgPace
+     *
+     * @param  mixed $exercises
+     * @param  mixed $totalDistance
+     * @param  mixed $totalDurationMinute
+     * @param  mixed $activityCode
+     * @return void
+     */
     public function calculateAvgPace($exercises, $totalDistance, $totalDurationMinute, $activityCode)
     {
         $avg_pace = 0;
         $avg_pace_code = null;
+
+        /** if $totalDurationMinute  is 0 Means *COMPLETE* button clicked */
+        $totalDurationMinute = $this->totalDurationMinute(['exercise' => $exercises]);
+        $isCompleteButton = (bool) ($totalDurationMinute == 0);
+
         if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
             # A) Use phone location and motion sensors (GPS + Accelerometer) (only for Outdoor)
-            // $avg_pace_code = "A";
-        }
-
-        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+            /** told by yash */
+            // $avg_speed = $totalDistance / $totalDurationMinute;
+            // $avg_pace = 60 / $avg_speed;
+            $avg_pace = $totalDistance == 0 ? 0 : ($totalDurationMinute / $totalDistance);
+            // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
+            $avg_pace_code = "A";
+        } else if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
             # B) Use phone motion sensor (Accelerometer) (only for Indoor)
-            // $avg_pace_code = "B";
+            /** told by yash */
+            // $avg_speed = $totalDistance / $totalDurationMinute;
+            // $avg_pace = 60 / $avg_speed;
+            $avg_pace = $totalDistance == 0 ? 0 : ($totalDurationMinute / $totalDistance);
+            $avg_pace = round($avg_pace, 4);
+            // dd('pace calculate B', $avg_pace, $totalDurationMinute, $totalDistance);
+            // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
+            $avg_pace_code = "B";
         }
 
         if ($avg_pace == 0) {
@@ -438,15 +423,22 @@ class RunCalculationsController extends Controller
             // $avg_pace_code = "C";
         }
 
-        if ($avg_pace == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
-            # D) For Indoor (if no movement detected) use OR if the user click on the ‘Complete’ button
-            # to log the workout, use equation (Please see Average Pace Calculation Guide).
+        if ($isCompleteButton && $avg_pace == 0) {
+            # D) If the user click on the ‘Complete’ button to log the workout, 
+            # use equation (Please see Average Pace Calculation Guide).
             $avg_pace = $this->calculatePaceCalculationGuid(
                 $exercises,
                 $totalDistance,
                 $totalDurationMinute
             );
             $avg_pace_code = "D";
+        }
+
+        if (!$isCompleteButton && $avg_pace == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+            # E) Only for Indoor: If the user click on the ‘Start’ button and if no movement detected,
+            # leave the value empty. Allow the user to key in the value manually (Step 5).
+            $avg_pace = 0;
+            $avg_pace_code = "E";
         }
         $avg_pace = $this->convertPaceNumberTo_M_S_format($avg_pace);
 
@@ -458,17 +450,37 @@ class RunCalculationsController extends Controller
         ];
     }
 
+    /**
+     * calculateElevationGain => Run Outdoor Only.
+     *
+     * @param  mixed $exercises
+     * @param  mixed $activityCode
+     * @return void
+     */
     public function calculateElevationGain($exercises, $activityCode)
     {
         $elevation_gain = 0;
         $elevation_gain_code = null;
 
-        if ($elevation_gain == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
-            # Out Door
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            # A) Use phone location sensor (Barometer) (only for Outdoor)
             // Pending
-        } else {
-            # In Door
-            // Pending
+            // $elevation_gain_code = 'A';
+
+
+            if ($elevation_gain == 0) {
+                # B) Record the Elevation Gain value recorded from the exercise watch or phone with
+                # barometric altimeter (if available).
+                // $elevation_gain = 0;
+                $elevation_gain_code = 'B';
+            }
+
+            if ($elevation_gain == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
+                # C) For Indoor use OR if the user click on the ‘Complete’ button to log the workout, Elevation
+                # Gain will show ‘-‘
+                $elevation_gain =  0;
+                $elevation_gain_code = 'C';
+            }
         }
 
         return [
@@ -477,7 +489,6 @@ class RunCalculationsController extends Controller
             'elevation_gain_code' => $elevation_gain_code
         ];
     }
-
 
     /**
      * calculateGradient => calculate gradient
@@ -492,7 +503,6 @@ class RunCalculationsController extends Controller
     {
         $gradient = 0;
         $gradient_code = null;
-        // dd('check gradient', $activityCode, $exercises);
 
         if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
             # A) Find Gradient with equation:
@@ -502,7 +512,7 @@ class RunCalculationsController extends Controller
              */
             $total_distance_in_meters = $total_distance // convert to km first
                 * 1000; // convert km to meters
-            $gradient = ($elevation_gain / $total_distance_in_meters) * 100;
+            $gradient = $total_distance_in_meters == 0 ? 0 : ($elevation_gain / $total_distance_in_meters) * 100;
             $gradient_code = "A";
 
             # B) If Elevation Gain value is not available, Gradient will show '-'
@@ -522,12 +532,158 @@ class RunCalculationsController extends Controller
             $gradient_code = "C";
         }
 
-
-
         return [
-            'gradient' => $gradient ?? null,
+            'gradient' => round($gradient, 2) ?? 0,
             'gradient_unit' =>  $this->gradient_unit,
             'gradient_code' => $gradient_code
         ];
+    }
+
+    /**
+     * calculateTotalKcal
+     *
+     * @param  mixed $exercises
+     * @param  mixed $avg_speed
+     * @param  mixed $gradient
+     * @param  mixed $userWeight
+     * @param  mixed $total_duration_minutes
+     * @return void
+     */
+    public function calculateTotalKcal($exercises, $avg_speed, $gradient, $userWeight, $total_duration_minutes)
+    {
+        $total_kcal = 0;
+
+        # A) Record the Total kcal value recorded from the exercise watch (if available).
+        // $total_kcal_code = 'A';
+
+        if ($total_kcal == 0) {
+            # B) Find Total kcal with equation:
+            $total_kcal_code = 'B';
+
+            /** NOTE: If the user’s weight setting is in lbs (Under Settings → Training → Imperial), convert it
+             * to kg first and round off to 1 decimal place before using the value in Step 4:
+             * Ex. 1lbs = 0.45359237 kg 
+             */
+
+            /**
+             * Step 1 (Find m/min):
+             * Using the average speed (km/hr or miles/ hr), convert it to m/min using one of the equation
+             * (depending on user’s unit setting):
+             * a. m/min = speed in km/hr x 16.7
+             * b. m/min = speed in miles/hr x 26.8
+             */
+            $m_min = $avg_speed * 16.7; // default set for km
+
+            /**
+             * Step 2 (Find VO2):
+             * VO2 = (0.2 x step 1) + (0.9 x step 1 x (gradient/100)) + 3.5
+             */
+            $VO2 = (0.2 * $m_min) + (0.9 * $m_min * ($gradient / 100)) + 3.5;
+
+            /**
+             * Step 3 (Find MET value):
+             * MET = Step 2/ 3.5
+             */
+            $MET  = $VO2 / 3.5;
+
+            /**
+             * Step 4 (Find kcal/min):
+             * kcal/min = (Step 3 x 3.5 x user’s weight in kg) / 200
+             */
+            $kcal_min_4 = ($MET * 3.5 * $userWeight) / 200;
+
+            /**
+             * Step 5 (Final total kcal):
+             * Total kcal = Step 4 x Total Duration in mins
+             */
+            $total_kcal = $kcal_min_4 * $total_duration_minutes;
+        }
+
+        return [
+            "total_kcal" => round($total_kcal, 2),
+            "total_kcal_code" => $total_kcal_code
+        ];
+    }
+    /**
+     * findTotalDistanceUsingDuration
+     *
+     * @param  mixed $exercises
+     * @return void
+     */
+    public function findTotalDistanceUsingDuration($exercises)
+    {
+        $allDuration = 0;
+        foreach ($exercises as $key => $exercise) {
+
+            if (isset($exercise['pace'], $exercise['duration'])) {
+                /** convert pace to seconds */
+                /** 
+                 * Step 1 - Convert Pace timing to seconds
+                 * Lap 1 Pace timing to seconds → 6 x 60 = 360
+                 */
+                $paceToSpeedArray = explode(':', $exercise['pace']);
+                $paceToSpeed = ($paceToSpeedArray[0] * 60) + $paceToSpeedArray[1];
+
+                /**
+                 * Step 2 – Find Speed
+                 * Lap 1 Speed → (60 x 60) / 360 = 10 km/hr
+                 */
+                $totalSpeed = round(((60 * 60) / $paceToSpeed), 1);
+
+                /**
+                 * Step 3 – Find Total Duration
+                 * Lap 1 Duration (in hour) → 20 / 60 = 0.3333 (4 decimals place)
+                 * "duration" => "00:20:00"
+                 */
+                $durationArray = explode(':', $exercise['duration']);
+                $totalDuration = round(
+                    (int) $durationArray[0]
+                        + ((int) $durationArray[1] / 60)
+                        + ((int) $durationArray[2] / 3600),
+                    4
+                );
+                /**
+                 * Step 4 – Find Distance
+                 * Lap 1 Distance → 0.3333 x 10 = 3.333 = 3.30km (2 decimals place)
+                 */
+                $distanceByDurationPace[] = round(($totalDuration * $totalSpeed), 2);
+            }
+            if (isset($exercise['speed'], $exercise['duration'])) {
+                /**
+                 * Step 1
+                 * Lap 1 Duration in hour → 20 / 60 = 0.3333 (4 decimals place)
+                 */
+                $durationArray = explode(':', $exercise['duration']);
+
+                $totalDuration = round(
+                    (int) $durationArray[0]
+                        + ((int) $durationArray[1] / 60)
+                        + ((int) $durationArray[2] / 3600),
+
+                    4
+                );
+
+                /**
+                 * Step 2
+                 * Lap 1 Distance → 0.3333 x 9 = 2.9997 = 3km
+                 */
+                $distanceByDurationSpeed[] = round($totalDuration * ($exercise['speed'] * 1), 4);
+            }
+        }
+
+        if (isset($distanceByDurationSpeed)) {
+            /** SPEED && DURATION
+             * Step 3 – Find Total Distance for all Laps
+             * Total Distance → 3.3 + 4.2 = 7.5 km (SUM OF ALL STEP 4)
+             */
+
+            return array_sum($distanceByDurationSpeed);
+        } else if (isset($distanceByDurationPace)) {
+            /** PACE && DURATION
+             * Step 5 – Find Total Distance for all Laps
+             * Total Distance → 3.3 + 4.2 = 7.5 km (SUM OF ALL STEP 4)
+             */
+            return array_sum($distanceByDurationPace);
+        }
     }
 }

@@ -27,7 +27,11 @@ class ResistanceCalculationController extends Controller
 
 
     /**
-     * CYCLE ( IN | OUT )
+     * generateCalculation =>>> CYCLE ( IN | OUT )
+     *
+     * @param  mixed $trainingLog
+     * @param  mixed $activityCode
+     * @return void
      */
     public function generateCalculation($trainingLog, $activityCode)
     {
@@ -45,7 +49,6 @@ class ResistanceCalculationController extends Controller
         # A) Use phone tracker (when user starts the workout log to when the workout log ends). 
         // $start_time = collect($trainingLog['exercise'])->where('start_time', '<>', null)->pluck('start_time')->first();
         // $end_time = collect($trainingLog['exercise'])->where('end_time', '<>', null)->pluck('end_time')->first();
-        // dd('check is in start_time and end Time', $start_time, $end_time,   $trainingLog['exercise']);
 
         // if (isset($start_time, $end_time)) {
         //     /** Calculate Total Duration From Start Time To End Time From Exercises */

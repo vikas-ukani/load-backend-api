@@ -149,7 +149,7 @@ class LoadCenterRequestRepositoryEloquent extends BaseRepository implements User
      *
      * @param mixed $input
      *
-     * @return void
+     * @return object
      */
     public function getDetailsByInput($input = null)
     {

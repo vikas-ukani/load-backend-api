@@ -52,13 +52,13 @@ class SummaryCalculationController extends Controller
         $summaryResponse['notes'] = $trainingLog['notes'] ?? null;
         $summaryResponse['comments'] = $trainingLog['comments'] ?? null;
         $summaryResponse['exercise'] = $trainingLog['exercise'] ?? null;
+        $summaryResponse['outdoor_route_data'] = $trainingLog['outdoor_route_data'] ?? null; // To show the map for outdoor only.
         $summaryResponse['RPE'] = $trainingLog['RPE'] ?? null;
 
         $summaryResponse['date'] = $trainingLog['date'];
         $summaryResponse['targeted_hr'] = $trainingLog['targeted_hr'] ?? null;
 
         # 3 Apply Summary Calculations activity wise ( activity wise different calculations )
-        // dd('asd', $activityCode);
         if (in_array($activityCode, [TRAINING_ACTIVITY_CODE_RUN_INDOOR, TRAINING_ACTIVITY_CODE_RUN_OUTDOOR])) {
             /** generate calculations from RunCalculationsController controller and return it. */
             $response = app(RunCalculationsController::class)->generateRunCalculation($trainingLog);
@@ -84,6 +84,13 @@ class SummaryCalculationController extends Controller
         return $this->sendSuccessResponse($summaryResponse, __('validation.common.details_found', ['module' => "Summary"]));
     }
 
+    /**
+     * getTrainingLogDetails
+     *
+     * @param  mixed $id
+     * @param  mixed $is_completed
+     * @return object
+     */
     public function getTrainingLogDetails($id, $is_completed = true)
     {
         $logRequest = [

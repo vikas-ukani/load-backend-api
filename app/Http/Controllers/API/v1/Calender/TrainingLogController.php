@@ -20,6 +20,7 @@ use App\Http\Controllers\API\v1\Calender\LogSummary\ResistanceCalculationControl
 use App\Http\Controllers\API\v1\Calender\LogSummary\RunCalculationsController;
 use App\Http\Controllers\API\v1\Calender\LogSummary\SummaryCalculationController;
 use App\Http\Controllers\API\v1\Calender\LogSummary\SwimmingController;
+use App\Libraries\Repositories\SettingTrainingRepositoryEloquent;
 use App\Supports\SummaryCalculationTrait;
 
 class TrainingLogController extends Controller
@@ -31,6 +32,7 @@ class TrainingLogController extends Controller
 
     protected $trainingLogRepository;
     protected $savedWorkoutsRepository;
+    protected $settingTrainingRepository;
     protected $trainingProgramsRepository;
     protected $trainingActivityRepository;
     protected $logCardioValidationsRepository;
@@ -40,10 +42,12 @@ class TrainingLogController extends Controller
         SavedWorkoutsRepositoryEloquent $savedWorkoutsRepository,
         TrainingProgramsRepositoryEloquent $trainingProgramsRepository,
         TrainingActivityRepositoryEloquent $trainingActivityRepository,
-        LogCardioValidationsRepositoryEloquent $logCardioValidationsRepository
+        LogCardioValidationsRepositoryEloquent $logCardioValidationsRepository,
+        SettingTrainingRepositoryEloquent $settingTrainingRepository
     ) {
         $this->trainingLogRepository = $trainingLogRepository;
         $this->savedWorkoutsRepository = $savedWorkoutsRepository;
+        $this->settingTrainingRepository = $settingTrainingRepository;
         $this->trainingProgramsRepository = $trainingProgramsRepository;
         $this->trainingActivityRepository = $trainingActivityRepository;
         $this->logCardioValidationsRepository = $logCardioValidationsRepository;
@@ -192,11 +196,6 @@ class TrainingLogController extends Controller
         /** convert date time to utc format */
         $date = $input['date'];
 
-        // $input['date'] = $this->utcToDateTimeFormat($input['date']);
-        // $input['date'] = $this->isoToUTCFormat($input['date']);
-
-        // dd('date converting', "Incoming Request " . $date, " Converted date " . $input['date']);
-
         /** create training log */
         $trainingLog = $this->trainingLogRepository->create($input);
         $trainingLog = $trainingLog->fresh();
@@ -238,15 +237,39 @@ class TrainingLogController extends Controller
         return $this->sendSuccessResponse($trainingLog, __("validation.common.created", ["module" => $this->moduleName]));
     }
 
+    /**
+     * show
+     *
+     * @param  mixed $id
+     * @return void
+     */
     public function show($id)
     {
         $trainingLog = $this->getLogDetailsById($id);
         if (!isset($trainingLog)) {
             return $this->sendBadRequest(null, __('validation.common.details_not_found', ['module' => $this->moduleName]));
         }
+        $trainingLog = $trainingLog->toArray();
+
+        $settingTraining = $this->settingTrainingRepository->getDetailsByInput([
+            'user_id' => \Auth::id(),
+            'list' => ['run_auto_pause', 'cycle_auto_pause'],
+            'first' => true
+        ]);
+        // if (isset($settingTraining)) {
+        $trainingLog['run_auto_pause'] = $settingTraining->run_auto_pause ?? true;
+        $trainingLog['cycle_auto_pause'] = $settingTraining->cycle_auto_pause ?? true;
+        // }
+
         return $this->sendSuccessResponse($trainingLog, __('validation.common.details_found', ['module' => $this->moduleName]));
     }
 
+    /**
+     * getLogDetailsById
+     *
+     * @param  mixed $id
+     * @return void
+     */
     public function getLogDetailsById($id)
     {
         /** give return data with relation */
@@ -506,11 +529,21 @@ class TrainingLogController extends Controller
                 return $this->sendBadRequest(null, $validation['message']);
             }
 
-            /** make a new request for replace old data */
-            $updateRequest = $log['generated_calculations'];
-
             $activityCode = $log['training_activity']['code'];
             $isDuration = $log['exercise'][0]['duration'];
+
+            /** generate all new calculation */
+            $generated_calculations = [];
+            $response = $this->getGeneratedCalculationFromByActivity($log, $activityCode);
+            $generated_calculations = array_merge($generated_calculations, $response);
+
+            /** make a new request for replace old data */
+            $storedDuration = $log['generated_calculations']['total_duration']; // TEST
+            $storedDistance = $log['generated_calculations']['total_distance']; // TEST
+            $log['generated_calculations'] = $generated_calculations;
+            $updateRequest = $log['generated_calculations'];
+            $log['generated_calculations']['total_duration'] = $storedDuration; // TEST
+            $log['generated_calculations']['total_distance'] = round($storedDistance, 1); // TEST
 
             /** working code */
             $updateRequest['total_duration'] =
@@ -518,10 +551,9 @@ class TrainingLogController extends Controller
             $durationArr = explode(':', $updateRequest['total_duration']);
             $durationArr[0] = (int) $durationArr[0];
             $updateRequest['total_duration'] = implode(':', $durationArr);
-            // dd('duration check ', $durationArr, $durationArr[0], $updateRequest['total_duration']);
-            // total_duration
             $updateRequest['total_distance'] =
                 $this->checkFromGeneratedCalculationByKey($log['generated_calculations'], $input['generated_calculations'], 'total_distance');
+            $updateRequest['total_distance'] = round($updateRequest['total_distance'], 1);
 
             /** convert 01:40 to 1:40 pace */
             $updateRequest['avg_pace'] =
@@ -535,13 +567,30 @@ class TrainingLogController extends Controller
             $ActivityCalculationController = $this->getActivityCalculationControllerNameByActivityCode($activityCode);
             if (isset($input['generated_calculations']['total_duration'])) {
                 /** if user update in total_duration then calculate total_distance */
-                $newDistance = $this->generateNewDistanceFromDurationAndSpeedOrPaceViaActivityCodeName($log, $input['generated_calculations']['total_duration']);
-                /** set new calculated distance value. */
-                $updateRequest['total_distance'] = round($newDistance, 2);
+                $newSpeedAndPace = $this->generateNewSpeedAndPaceFromDurationAndDistanceViaActivityCodeName($log, $input['generated_calculations']['total_duration']); // OLD
+                // NEW
+                // $newSpeedAndPace = $this->generatePaceSpeedByTotalDistance_divide_by_TotalDuration(
+                //     $log['generated_calculations']['total_distance'],
+                //     $input['generated_calculations']['total_duration']
+                // );
+                /** set new calculated pace and speed value. */
+                $updateRequest['total_duration_minutes'] = $newSpeedAndPace['total_duration_minutes']; // updated duration minutes
+                $updateRequest['avg_pace'] = $newSpeedAndPace['avg_pace'];
+                $paceArr = explode(':', $updateRequest['avg_pace']);
+                $paceArr[0] = (int) $paceArr[0];
+                $updateRequest['avg_pace'] = implode(':', $paceArr);
+                $updateRequest['avg_speed'] = $newSpeedAndPace['avg_speed'];
             } else if (isset($input['generated_calculations']['total_distance'])) {
                 /** if user update in total_distance then calculate avg_speed OR avg_pace */
-                $newSpeedAndPace = $this->generateNewSpeedAndPaceFromDistanceAndDurationViaActivityCodeName($log, $input['generated_calculations']['total_distance']);
+                $newSpeedAndPace = $this->generateNewSpeedAndPaceFromDistanceAndDurationViaActivityCodeName($log, $input['generated_calculations']['total_distance']); // OLD
+                // $newSpeedAndPace = $this->generatePaceSpeedByTotalDistance_divide_by_TotalDuration(
+                //     $input['generated_calculations']['total_distance'],
+                //     $log['generated_calculations']['total_duration'],
+                //     $log['generated_calculations']['total_duration_minutes']
+                // ); // NEW
+
                 /** set new calculated pace and speed value. */
+                $updateRequest['total_duration_minutes'] = $newSpeedAndPace['total_duration_minutes']; // updated duration minutes
                 $updateRequest['avg_pace'] = $newSpeedAndPace['avg_pace'];
                 $paceArr = explode(':', $updateRequest['avg_pace']);
                 $paceArr[0] = (int) $paceArr[0];
@@ -552,16 +601,15 @@ class TrainingLogController extends Controller
                 /** if user update in avg_speed then calculate total_duration */
                 $newDuration = $this->generateNewDurationFromDistanceAndPaceViaActivityCodeName($log, $input['generated_calculations']['avg_pace']);
                 /** set new calculated distance value. */
+                $updateRequest['total_duration_minutes'] = $this->convertDurationToMinutes($newDuration);
                 $updateRequest['total_duration'] = $newDuration;
                 $durationArr = explode(':', $updateRequest['total_duration']);
                 $durationArr[0] = (int) $durationArr[0];
                 $updateRequest['total_duration'] = implode(':', $durationArr);
-                // dd('new duration is ', $newDuration);
-                // total_duration
             } else if (isset($input['generated_calculations']['avg_speed'])) {
                 /** if user update in avg_pace then calculate total_duration */
                 $newDuration = $this->generateNewDurationFromDistanceAndSpeedViaActivityCodeName($log, $input['generated_calculations']['avg_speed']);
-                // dd('new duration from speed', $newDuration);
+                $updateRequest['total_duration_minutes'] = $this->convertDurationToMinutes($newDuration);
                 $updateRequest['total_duration'] = $newDuration;
                 $durationArr = explode(':', $updateRequest['total_duration']);
                 $durationArr[0] = (int) $durationArr[0];
@@ -571,16 +619,13 @@ class TrainingLogController extends Controller
 
             $log['generated_calculations'] = $updateRequest;
 
-            // $log->save();
             /** store calculated values */
-            // dd('updated res', $updateRequest);
             $logUpdated = $this->trainingLogRepository->updateRich(['generated_calculations' => $updateRequest], $log['id']);
 
 
             /** check for pase is selected or not */
             // $is_pace_selected = !!collect($log['exercise'])->whereIn('pace', [null])->pluck('pace')->first();
             $is_pace_selected = isset($log['exercise'][0], $log['exercise'][0]['pace']) ? true : false;
-            // dd('asd', $is_pace_selected,  $log['exercise']);
             // if ($is_pace_selected == false) {
             //     $is_pace_selected = !!collect($log['generated_calculations'])->pluck('pace')->first();
             // }
@@ -588,6 +633,7 @@ class TrainingLogController extends Controller
             $response = [
                 'training_activity' => $log['training_activity'],
                 'generated_calculations' => $updateRequest,
+                'exercise' => $log['exercise'],
                 'is_pace_selected' => $is_pace_selected ?? false
             ];
 
@@ -602,11 +648,11 @@ class TrainingLogController extends Controller
             $generated_calculations = [];
 
             /** get total_duration, total_distance, avg_speed, and avg_pace from CycleCalculationsController. */
+
             $response = $this->getGeneratedCalculationFromByActivity($log, $activityCode);
             $generated_calculations = array_merge($generated_calculations, $response);
 
             /** store calculated values */
-            // dd('updated data', $generated_calculations);
             $logUpdated = $this->trainingLogRepository->updateRich(['generated_calculations' => $generated_calculations], $input['id']);
             /** return first time generated */
 
@@ -616,10 +662,11 @@ class TrainingLogController extends Controller
             // if ($is_pace_selected == false) {
             //     $is_pace_selected = !!collect($log['generated_calculations'])->pluck('pace')->first();
             // }
-            // dd('asd', $is_pace_selected, !!collect($log['exercise'])->pluck('pace')->first(),  $log['exercise']);
+
             $response = [
                 'training_activity' => $log['training_activity'],
                 'generated_calculations' => $logUpdated->generated_calculations,
+                'exercise' => $logUpdated->exercise,
                 'is_pace_selected' => $is_pace_selected ?? false
             ];
             return $this->sendSuccessResponse($response, __('validation.common.updated', ['module' => $this->moduleName]));
@@ -686,9 +733,9 @@ class TrainingLogController extends Controller
             );
         } else {
             $calculateAverageSpeed = [
-                'avg_speed'         =>  null,
-                'avg_speed_unit'    =>  null,
-                'avg_speed_code'    =>  null
+                'avg_speed' => null,
+                'avg_speed_unit' => null,
+                'avg_speed_code' => null
             ];
         }
         $response = array_merge($response, $calculateAverageSpeed);
@@ -738,36 +785,50 @@ class TrainingLogController extends Controller
     }
 
     /**
-     * Calculate New Distance  From New Duration.
+     * generateNewSpeedAndPaceFromDurationAndDistanceViaActivityCodeName
+     * => Calculate New Distance  From New Duration.
+     * @param  mixed $trainingLog
+     * @param  mixed $newInputtedTotalDuration
+     * @return void
      */
-    public function generateNewDistanceFromDurationAndSpeedOrPaceViaActivityCodeName($trainingLog, $newInputtedTotalDuration)
+    public function generateNewSpeedAndPaceFromDurationAndDistanceViaActivityCodeName($trainingLog, $newInputtedTotalDuration)
     {
         $newDistance = $trainingLog['generated_calculations']['total_distance'] ?? 0;
-        $activityCode = $trainingLog['training_activity']['code'];
 
-        /**
-         *convert total minute from $newInputtedTotalDuration
-         */
-        // $newInputtedTotalDurationInHours = $this->convertDurationToHours($newInputtedTotalDuration);
-        $newInputtedTotalDurationInHours = $this->convertDurationToMinutes($newInputtedTotalDuration);
+        $durationMinutes = $this->convertDurationToMinutes($newInputtedTotalDuration);
 
         // if (in_array($activityCode, [TRAINING_ACTIVITY_CODE_RUN_INDOOR, TRAINING_ACTIVITY_CODE_RUN_OUTDOOR])) {
         /** Run activity */
-        $newDistance =
-            $newInputtedTotalDurationInHours
-            * $trainingLog['generated_calculations']['avg_speed']
-            /** when activity is run then select speed */
-        ;
-        return round($newDistance, 2);
-        dd('run', $newDistance, $newInputtedTotalDuration, "OLD", $trainingLog['generated_calculations']);
-        // } else if (in_array($activityCode, [TRAINING_ACTIVITY_CODE_RUN_INDOOR, TRAINING_ACTIVITY_CODE_RUN_OUTDOOR])) {
-        // # pass
-        // }
-        return $newDistance;
+        # Pace = Time / Distance        
+        $avgPace = ($newDistance == 0 ? 0 : ($durationMinutes / $newDistance));
+        $avgPace = round($avgPace, 4);
+
+        # Speed = 60 / Pace
+        $avgSpeed = ($avgPace == 0 ? 0 : round((60 / $avgPace), 1));
+
+        $newAvgPace = $this->convertPaceNumberTo_M_S_format($avgPace);
+        // dd(
+        //     'Calculation Pace From Duration Here',
+        //     "durationMinutes " . $durationMinutes,
+        //     "newDistance " . $newDistance,
+        //     " ($durationMinutes / $newDistance) => " .  $avgPace,
+        //     "avgPace " . $avgPace,
+        //     "newAvgPace " . $newAvgPace,
+        //     "avgSpeed " . $avgSpeed
+        // );
+        return [
+            'total_duration_minutes' => $durationMinutes,
+            'avg_pace' => $newAvgPace,
+            'avg_speed' => $avgSpeed
+        ];
     }
 
     /**
-     * Calculate New Speed | Pace
+     * generateNewSpeedAndPaceFromDistanceAndDurationViaActivityCodeName => Calculate New Speed | Pace
+     *
+     * @param  mixed $trainingLog
+     * @param  mixed $newInputtedDistance
+     * @return void
      */
     public function generateNewSpeedAndPaceFromDistanceAndDurationViaActivityCodeName($trainingLog, $newInputtedDistance)
     {
@@ -777,30 +838,32 @@ class TrainingLogController extends Controller
 
         $durationMinutes = $this->convertDurationToMinutes($trainingLog['generated_calculations']['total_duration']);
 
-        // if (in_array($activityCode, [TRAINING_ACTIVITY_CODE_RUN_INDOOR, TRAINING_ACTIVITY_CODE_RUN_OUTDOOR])) {
         /** Run activity */
         # Pace = Time / Distance
-        $avgPace = $durationMinutes / $newInputtedDistance;
-        // }
+
+        $avgPace = $newInputtedDistance == 0 ? 0 : ($durationMinutes / $newInputtedDistance);
 
         # Speed = 60 / Pace
-        $avgSpeed = 60 / $avgPace;
-
+        $avgSpeed = $avgPace == 0 ? 0 : (60 / $avgPace);
 
         # Speed = distance / duration (minute)
         // $avgSpeed = 60 / $avgPace;
 
-        // dd('check pace', $avgPace);
         $newAvgPace = $this->convertPaceNumberTo_M_S_format($avgPace);
-        // dd('old new', $avgPace, $newAvgPace);
+
         return [
             'avg_pace' => $newAvgPace,
-            'avg_speed' => round($avgSpeed, 2)
+            'avg_speed' => round($avgSpeed, 1),
+            'total_duration_minutes' => $durationMinutes
         ];
     }
 
     /**
-     * Calculate New Duration Using new Pace
+     * generateNewDurationFromDistanceAndPaceViaActivityCodeName => Calculate New Duration Using new Pace
+     *
+     * @param  mixed $trainingLog
+     * @param  mixed $newInputtedPace
+     * @return void
      */
     public function generateNewDurationFromDistanceAndPaceViaActivityCodeName($trainingLog, $newInputtedPace)
     {
@@ -809,24 +872,23 @@ class TrainingLogController extends Controller
         $avgPace = $newInputtedPace;
         $activityCode = $trainingLog['training_activity']['code'];
         $distance = $trainingLog['generated_calculations']['total_distance'];
+        $distance = round($distance, 1);
 
-        // if (in_array($activityCode, [TRAINING_ACTIVITY_CODE_RUN_INDOOR, TRAINING_ACTIVITY_CODE_RUN_OUTDOOR])) {
         $paceToSpeedArray = explode(':', $avgPace);
-        $paceToSeconds = ($paceToSpeedArray[0] * 60) + $paceToSpeedArray[1];
-        $newSpeed = round(((60 * 60) / $paceToSeconds), 1);
-
+        $paceToMinutes = ($paceToSpeedArray[0]) + ($paceToSpeedArray[1] / 60);
+        $newSpeed = round((60 / $paceToMinutes), 4);
         $newDurationMinutes = round((($distance / $newSpeed)  * 60), 2);
-        // }
 
-        $newDurationMinutesArr = explode('.', $newDurationMinutes);
-        // (('0.' . $newDurationMinutesArr[1]) * 60 );
-
-        return (gmdate("H:i:s", (($newDurationMinutes ?? 0)  * 60)));
-        dd('new ', $paceToSeconds, $newSpeed, (gmdate("H:i:s", (($newDurationMinutes ?? 0)  * 60))), $newSpeed,  $newInputtedPace, $paceToSeconds, $paceToSpeedArray, $trainingLog['generated_calculations']);
+        return $this->convertDurationMinutesToTimeFormat($newDurationMinutes);
+        // return (gmdate("H:i:s", (($newDurationMinutes ?? 0)  * 60)));
     }
 
     /**
-     * Calculate New Duration Using new Speed
+     * generateNewDurationFromDistanceAndSpeedViaActivityCodeName => Calculate New Duration Using new Speed
+     *
+     * @param  mixed $trainingLog
+     * @param  mixed $newInputtedSpeed
+     * @return void
      */
     public function generateNewDurationFromDistanceAndSpeedViaActivityCodeName($trainingLog, $newInputtedSpeed)
     {
@@ -839,6 +901,36 @@ class TrainingLogController extends Controller
         // $newDuration = (gmdate("H:i:s", (($duration ?? 0)  * 60)));
         // }
         return (gmdate("H:i:s", (($newDurationMinutes ?? 0)  * 60)));
-        dd('old distance', $distance, $newDurationMinutes, $trainingLog['generated_calculations']);
+    }
+
+    /**
+     * generatePaceSpeedByTotalDistance_divide_by_TotalDuration
+     *
+     * @param  mixed $TotalDistance
+     * @param  mixed $TotalDuration
+     * @param  mixed $TotalDurationMinutes
+     * @return void
+     */
+    public function generatePaceSpeedByTotalDistance_divide_by_TotalDuration($TotalDistance, $TotalDuration, $TotalDurationMinutes = 0)
+    {
+        if ($TotalDurationMinutes == 0) {
+            $TotalDurationMinutes = $this->convertDurationToMinutes($TotalDuration);
+        }
+
+        # Formula for Speed and Pace
+        # Average Speed (km/hr) = Total Distance / Total Duration
+        # NOTE: We can find Average Pace by converting Average Speed. Use this equation:
+        # Average Pace (mins/km) = 60 / Average Speed
+        # • Requires conversion of Average Pace fraction to time
+
+        $avg_speed = $TotalDistance / $TotalDurationMinutes;
+        $avgPace = 60 / $avg_speed;
+        $avg_pace = $this->convertPaceNumberTo_M_S_format($avgPace); # • Requires conversion of Average Pace fraction to time
+        // dd('Updated', $TotalDistance, $TotalDuration, $TotalDurationMinutes, "New Generated", $avgPace, $avg_pace, $avg_speed, $TotalDurationMinutes);
+        return [
+            'avg_pace' => $avg_pace,
+            'avg_speed' => $avg_speed,
+            'total_duration_minutes' => $TotalDurationMinutes
+        ];
     }
 }
