@@ -23,7 +23,7 @@ trait SummaryCalculationTrait
         $arrLast = Arr::last($trainingLog['exercise']);
 
         // if start_time is "0" means COMPLETE button Clicked
-        if ($arrFirst['start_time'] == "") {
+        if ($arrFirst['start_time'] == "" || !isset($arrLast['end_time'])  ||  $arrLast['end_time'] == "") {
             return 0; // COMPLETE button clicked.
         }
 

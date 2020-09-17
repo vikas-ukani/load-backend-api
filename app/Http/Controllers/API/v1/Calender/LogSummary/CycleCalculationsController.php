@@ -279,18 +279,18 @@ class CycleCalculationsController extends Controller
 
         # A) If the user click on the ‘Start’ button, use phone location and motion sensors 
         # (GPS + Accelerometer) (only for Outdoor)
-        if ($activityCode == TRAINING_ACTIVITY_CODE_CYCLE_OUTDOOR) {
-            // NOTE - Remain To Test
-            $total_distance = $this->getTotalDistanceFromStartEndLatitudeLongitude($trainingLog);
-            $total_distance_code = "A";
-        }
+        // if ($activityCode == TRAINING_ACTIVITY_CODE_CYCLE_OUTDOOR) {
+        //     $total_distance = $this->getTotalDistanceFromStartEndLatitudeLongitude($trainingLog);
+        //     $total_distance_code = "A";
+        // }
 
-        if (!$isCompleteButton && $total_distance == 0) {
-            #  B) If the user click on the ‘Start’ button, 
-            # use the value recorded from the power meter (if available)
-            // $total_distance_code = "B";
-        }
+        // if (!$isCompleteButton && $total_distance == 0) {
+        #  B) If the user click on the ‘Start’ button, 
+        # use the value recorded from the power meter (if available)
+        // $total_distance_code = "B";
+        // }
 
+        # A, B and C are merged together
         $lastExerciseTotalDistance = collect($trainingLog['exercise'])->whereNotIn('total_distance', ['0', 0, null])->pluck('total_distance')->first();
         # C) If the user click on the ‘Start’ button, 
         # use the value recorded from the exercise watch (if available)
@@ -673,6 +673,7 @@ class CycleCalculationsController extends Controller
 
             # B) Record the Elevation Gain value recorded from the power meter, exercise watch or
             // phone with barometric altimeter (if available).
+            // Elivation gain getting from app side using (power meter, gps, watch and ...)
             if ($elevation_gain == 0) {
                 $elevation_gain_code = "B";
             }
@@ -693,12 +694,12 @@ class CycleCalculationsController extends Controller
     /**
      * calculateGradient => calculate gradient
      *
-     * @param  mixed $exercises
-     * @param  mixed $activityCode
-     * @param  mixed $elevation_gain
-     * @param  mixed $total_distance
-     * define sample data
-     * @return array
+     * @param  mixed $exercises 
+     * @param  mixed $activityCode 
+     * @param  mixed $elevation_gain 
+     * @param  mixed $total_distance 
+     * define sample data 
+     * @return array 
      */
     public function calculateGradient($exercises, $activityCode, $elevation_gain, $total_distance)
     {

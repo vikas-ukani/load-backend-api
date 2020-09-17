@@ -257,8 +257,8 @@ class RunCalculationsController extends Controller
         # A) If the user click on the ‘Start’ button,
         # use phone location and motion sensors (GPS + Accelerometer) (only for Outdoor)
         if (!$isCompleteButton && $activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
-            $total_distance = $this->getTotalDistanceFromStartEndLatitudeLongitude($trainingLog);
-            $total_distance_code = "A";
+            // $total_distance = $this->getTotalDistanceFromStartEndLatitudeLongitude($trainingLog);
+            // $total_distance_code = "A";
         } else if (!$isCompleteButton && $activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
             # B) If the user click on the ‘Start’ button, 
             # use phone motion sensor (Accelerometer) (only for Indoor).
@@ -270,6 +270,7 @@ class RunCalculationsController extends Controller
             }
         }
 
+        # For A and C case mixed.
         $lastExerciseTotalDistance = collect($trainingLog['exercise'])->whereNotIn('total_distance', ['0', 0, null])->pluck('total_distance')->first();
         # C) If the user click on the ‘Start’ button, 
         # record the Total Distance value recorded from the exercise watch (if available).

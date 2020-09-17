@@ -34,7 +34,7 @@ class TrainingSettingUnits extends Model
         return [
             'name' => $once . 'required',
             'code' => $once . 'required',
-            //            'description' =>  $once . 'required',
+            // 'description' =>  $once . 'required',
             'is_active' => $once . 'required',
         ];
     }

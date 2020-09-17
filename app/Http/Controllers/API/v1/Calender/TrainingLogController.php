@@ -85,19 +85,19 @@ class TrainingLogController extends Controller
      */
     public function saveToTemplateAsSavedWorkout($id)
     {
-        $trainingLog = $this->trainingLogRepository->getDetailsByInput([
-            'id' => $id,
-            'first' => true,
-        ]);
-        if (!isset($trainingLog)) {
-            return $this->sendBadRequest(null, __('validation.common.details_not_found', ['module' => $this->moduleName]));
-        }
-        $trainingLog->is_log = false; // set to false means show for both log and template
-        $trainingLog->save();
-        $template = $this->saveWorkoutAsTemplate($trainingLog);
-        if (isset($template) && $template['flag'] == false) {
+        $trainingLog = $this->trainingLogRepository->getDetailsByInput([ 
+            'id' => $id, 
+            'first' => true, 
+        ]); 
+        if (!isset($trainingLog)) { 
+            return $this->sendBadRequest(null, __('validation.common.details_not_found', ['module' => $this->moduleName])); 
+        } 
+        $trainingLog->is_log = false; // set to false means show for both log and template 
+        $trainingLog->save(); 
+        $template = $this->saveWorkoutAsTemplate($trainingLog); 
+        if (isset($template) && $template['flag'] == false) { 
             return $this->sendBadRequest(null, $template['message']);
-        }
+        } 
         return $this->sendSuccessResponse($template['data'], __("validation.common.created", ["module" => $this->moduleName]));
     }
 
@@ -268,7 +268,7 @@ class TrainingLogController extends Controller
      * getLogDetailsById
      *
      * @param  mixed $id
-     * @return void
+     * @return object
      */
     public function getLogDetailsById($id)
     {

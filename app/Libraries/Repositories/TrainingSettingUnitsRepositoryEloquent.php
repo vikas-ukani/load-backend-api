@@ -99,13 +99,13 @@ class TrainingSettingUnitsRepositoryEloquent extends BaseRepository implements U
         }
     }
 
-    /**
-     * getCommonPaginationFilterFn => Get pagination and get data
-     *
-     * @param mixed $value
-     * @param mixed $input
-     *
-     * @return void
+    /** 
+     * getCommonPaginationFilterFn => Get pagination and get data 
+     * 
+     * @param mixed $value 
+     * @param mixed $input 
+     * 
+     * @return void 
      */
     protected function getCommonPaginationFilterFn(&$value, $input)
     {

@@ -198,7 +198,7 @@ class SettingTrainingRepositoryEloquent extends BaseRepository implements UsersR
      *
      * @param  mixed $input
      *
-     * @return void
+     * @return object
      */
     public function getDetailsByInput($input = null)
     {

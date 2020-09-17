@@ -15,13 +15,13 @@ trait MessageClass
      */
     public function sendBadRequest($returnArray = null, $returnMessage, $statusCode = RESPONSE_BAD_REQUEST)
     {
-        $response = [
-            'success' => false,
-            'status' => $statusCode,
-            'data' => null,
-            'message' => is_string($returnMessage) ? ucfirst(strtolower($returnMessage)) : $returnMessage
-        ];
-        return response()->json($response);
+        $response = [ 
+            'success' => false, 
+            'status' => $statusCode, 
+            'data' => null, 
+            'message' => is_string($returnMessage) ? ucfirst(strtolower($returnMessage)) : $returnMessage 
+        ]; 
+        return response()->json($response); 
     }
 
     /**
