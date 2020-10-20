@@ -34,7 +34,6 @@ $router->group([/* 'prefix' => 'api' */], function () use ($router) {
 
             $router->get('log-cardio-validation-list', "TrainingLogController@listOfLogCardioValidations");
 
-
             /**
              * training log related routes
              */

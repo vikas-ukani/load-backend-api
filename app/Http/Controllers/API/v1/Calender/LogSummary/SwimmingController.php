@@ -89,7 +89,7 @@ class SwimmingController extends Controller
         }
 
         # Average Speed
-        $calculateAverageSpeed = $this->calculateAverageSpeed(
+        $calculateAverageSpeed = $this->calculateAverageSpeedPace(
             $trainingLog['exercise'],
             $response['avg_pace'],
             $response['total_distance'],
@@ -209,7 +209,7 @@ class SwimmingController extends Controller
     }
 
     /**
-     * calculateAverageSpeed
+     * calculateAverageSpeedPace
      *
      * @param  mixed $exercises
      * @param  mixed $avg_pace
@@ -217,7 +217,7 @@ class SwimmingController extends Controller
      * @param  mixed $totalDurationMinute
      * @return void
      */
-    public function calculateAverageSpeed($exercises, $avg_pace, $totalDistance, $totalDurationMinute)
+    public function calculateAverageSpeedPace($exercises, $avg_pace, $totalDistance, $totalDurationMinute)
     {
         # A, B → C
         $avg_speed = 0;
@@ -226,10 +226,9 @@ class SwimmingController extends Controller
         $isCompleteButton = (bool) ($totalDurationMinute == 0);
 
         # A) If the user click on the ‘Start’ button, use phone location and motion sensors (GPS + Accelerometer)
-        // FIXME - Complete this..
         if (!$isCompleteButton) {
-            /** use this told by yash */
             $avg_speed = $totalDistance / ($totalDurationMinute / 60); // minute to hr
+            /** use this told by yash */
             // $avg_speed = $totalDistance / $totalDurationMinute;
             // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
             // if (isset($avg_pace)) {

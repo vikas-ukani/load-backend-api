@@ -63,7 +63,7 @@ class RunCalculationsController extends Controller
         }
         # END Total Duration 
 
-        # Calculate Active Duration and Minutes
+        # Calculate Active Duration and Minutes || replaced by total_duration
         if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
             $deActiveDuration = $trainingLog['exercise'][0]['deactive_duration']  ?? 0;
             $calculateActiveDuration = $this->calculateActiveDuration($response['total_duration_minutes'], $deActiveDuration);
@@ -100,7 +100,7 @@ class RunCalculationsController extends Controller
                 $trainingLog['exercise'],
                 $activityCode,
                 $response['total_distance'],
-                $response['total_duration_minutes']
+                $response['active_duration_minutes'] ?? $response['total_duration_minutes']
             );
             $response = array_merge($response, $calculateAverageSpeed);
         }
@@ -117,7 +117,7 @@ class RunCalculationsController extends Controller
             $calculateAvgPace = $this->calculateAvgPace(
                 $trainingLog['exercise'],
                 $response['total_distance'],
-                $response['total_duration_minutes'],
+                $response['active_duration_minutes'] ?? $response['total_duration_minutes'],
                 $activityCode
             );
             $response = array_merge($response, $calculateAvgPace);
@@ -208,9 +208,9 @@ class RunCalculationsController extends Controller
             $totalDurationMinuteCode = "D";
         }
         // }
-
+        $totalDurationMinute = round($totalDurationMinute, 1);
         return [
-            'total_duration_minutes' => round($totalDurationMinute, 1),
+            'total_duration_minutes' => $totalDurationMinute,
             'total_duration' => $this->convertDurationMinutesToTimeFormat($totalDurationMinute),
             'total_duration_code' => $totalDurationMinuteCode,
         ];
@@ -324,23 +324,29 @@ class RunCalculationsController extends Controller
         /** if $totalDurationMinute  is 0 Means *COMPLETE* button clicked */
         $totalDurationMinute = $this->totalDurationMinute(['exercise' => $exercises]);
         $isCompleteButton = (bool) ($totalDurationMinute == 0);
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            $deActiveDuration = $exercises[0]['deactive_duration'] ?? 0;
+            $calculateActiveDuration = $this->calculateActiveDuration($total_duration_minutes, $deActiveDuration);
+            $res = array_merge([], $calculateActiveDuration);
+            $totalDurationMinute =  $res['active_duration_minutes'];
+        }
 
         # A) If the user click on the ‘Start’ button, use phone motion sensor, 
         # use phone location and motion sensors (GPS + Accelerometer) 
         # (only for Outdoor)
         if (!$isCompleteButton &&  $activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
             /** use this told by yash */
-            $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            $avg_speed = $total_distance / ($totalDurationMinute / 60); // minute to hr 
             // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
-            // if (isset($avg_pace)) {
+            // if (isset($avg_pace)) { 
             //     # convert pace to speed
-            //     $avg_speed = (60 / $avg_pace);
+            //     $avg_speed = (60 / $avg_pace); 
             // }
             $avg_speed_code = "A";
         }
         if (!$isCompleteButton &&  $activityCode = TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
             /** use this told by yash */
-            $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            $avg_speed = $total_distance / ($totalDurationMinute / 60); // minute to hr
             # B) Use phone motion sensor (Accelerometer) (only for Indoor)
             // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
             // if (isset($avg_pace)) {
@@ -348,6 +354,14 @@ class RunCalculationsController extends Controller
             //     $avg_speed = (60 / $avg_pace);
             // }
             $avg_speed_code = "B";
+            // dd(
+            //     'check data speed',
+            //     $total_distance,
+            //     $totalDurationMinute / 60,
+            //     $total_distance / ($totalDurationMinute / 60),
+            //     $avg_speed,
+            //     $avg_speed_code
+            // );
         }
         $avg_speed = $avg_speed ?? 0;
         if ($avg_speed == 0) {
@@ -371,9 +385,9 @@ class RunCalculationsController extends Controller
             # leave the value empty. Allow the user to key in the value manually (Step 5).
             $avg_speed_code = "E";
         }
-
+        $avg_speed = round($avg_speed, 1);
         $data = [
-            'avg_speed' => round($avg_speed, 1),
+            'avg_speed' => $avg_speed,
             'avg_speed_unit' => $this->avg_speed_unit,
             'avg_speed_code' => $avg_speed_code
         ];
@@ -390,7 +404,7 @@ class RunCalculationsController extends Controller
      * @param  mixed $activityCode
      * @return void
      */
-    public function calculateAvgPace($exercises, $totalDistance, $totalDurationMinute, $activityCode)
+    public function calculateAvgPace($exercises, $totalDistance, $total_duration_minutes, $activityCode)
     {
         $avg_pace = 0;
         $avg_pace_code = null;
@@ -398,23 +412,29 @@ class RunCalculationsController extends Controller
         /** if $totalDurationMinute  is 0 Means *COMPLETE* button clicked */
         $totalDurationMinute = $this->totalDurationMinute(['exercise' => $exercises]);
         $isCompleteButton = (bool) ($totalDurationMinute == 0);
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            $deActiveDuration = $exercises[0]['deactive_duration']  ?? 0;
+            $calculateActiveDuration = $this->calculateActiveDuration($total_duration_minutes, $deActiveDuration);
+            $res = array_merge([], $calculateActiveDuration);
+            $total_duration_minutes =  $res['active_duration_minutes'];
+        }
 
         if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
             # A) Use phone location and motion sensors (GPS + Accelerometer) (only for Outdoor)
             /** told by yash */
-            // $avg_speed = $totalDistance / $totalDurationMinute;
+            // $avg_speed = $totalDistance / $total_duration_minutes;
             // $avg_pace = 60 / $avg_speed;
-            $avg_pace = $totalDistance == 0 ? 0 : ($totalDurationMinute / $totalDistance);
+            $avg_pace = $totalDistance == 0 ? 0 : ($total_duration_minutes / $totalDistance);
             // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
             $avg_pace_code = "A";
         } else if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_INDOOR) {
             # B) Use phone motion sensor (Accelerometer) (only for Indoor)
             /** told by yash */
-            // $avg_speed = $totalDistance / $totalDurationMinute;
+            // $avg_speed = $totalDistance / $total_duration_minutes;
             // $avg_pace = 60 / $avg_speed;
-            $avg_pace = $totalDistance == 0 ? 0 : ($totalDurationMinute / $totalDistance);
+            $avg_pace = $totalDistance == 0 ? 0 : ($total_duration_minutes / $totalDistance);
             $avg_pace = round($avg_pace, 4);
-            // dd('pace calculate B', $avg_pace, $totalDurationMinute, $totalDistance);
+
             // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
             $avg_pace_code = "B";
         }
@@ -430,7 +450,7 @@ class RunCalculationsController extends Controller
             $avg_pace = $this->calculatePaceCalculationGuid(
                 $exercises,
                 $totalDistance,
-                $totalDurationMinute
+                $total_duration_minutes
             );
             $avg_pace_code = "D";
         }
@@ -463,11 +483,15 @@ class RunCalculationsController extends Controller
         $elevation_gain = 0;
         $elevation_gain_code = null;
 
+        // Implement while app side is done ...
         if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            /*** get elevation_gain from Exercise Last Lap */
+
+            // catch the elevation gain **** 
+            $elevation_gain = isset(collect($exercises)->last()['elevation_gain']) ? collect($exercises)->last()['elevation_gain'] : 0;
             # A) Use phone location sensor (Barometer) (only for Outdoor)
             // Pending
             // $elevation_gain_code = 'A';
-
 
             if ($elevation_gain == 0) {
                 # B) Record the Elevation Gain value recorded from the exercise watch or phone with
@@ -522,6 +546,7 @@ class RunCalculationsController extends Controller
                 $gradient_code = "B";
             }
         }
+
         if ($gradient == 0) {
             # C) For Indoor use OR if the user click on the ‘Complete’ button to log the workout, use equation:
             /**
@@ -535,7 +560,7 @@ class RunCalculationsController extends Controller
 
         return [
             'gradient' => round($gradient, 2) ?? 0,
-            'gradient_unit' =>  $this->gradient_unit,
+            'gradient_unit' => $this->gradient_unit,
             'gradient_code' => $gradient_code
         ];
     }
@@ -605,6 +630,8 @@ class RunCalculationsController extends Controller
             "total_kcal_code" => $total_kcal_code
         ];
     }
+
+
     /**
      * findTotalDistanceUsingDuration
      *
@@ -613,10 +640,11 @@ class RunCalculationsController extends Controller
      */
     public function findTotalDistanceUsingDuration($exercises)
     {
-        $allDuration = 0;
+
         foreach ($exercises as $key => $exercise) {
 
             if (isset($exercise['pace'], $exercise['duration'])) {
+
                 /** convert pace to seconds */
                 /** 
                  * Step 1 - Convert Pace timing to seconds
@@ -673,10 +701,10 @@ class RunCalculationsController extends Controller
         }
 
         if (isset($distanceByDurationSpeed)) {
-            /** SPEED && DURATION
-             * Step 3 – Find Total Distance for all Laps
-             * Total Distance → 3.3 + 4.2 = 7.5 km (SUM OF ALL STEP 4)
-             */
+            /** SPEED && DURATION 
+             * Step 3 – Find Total Distance for all Laps 
+             * Total Distance → 3.3 + 4.2 = 7.5 km (SUM OF ALL STEP 4) 
+             */ // Remove it and show the right duration and pace ...
 
             return array_sum($distanceByDurationSpeed);
         } else if (isset($distanceByDurationPace)) {

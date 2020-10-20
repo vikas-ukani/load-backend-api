@@ -1,4 +1,5 @@
 <?php
+
 /** @noinspection ALL */
 
 use App\Models\User;

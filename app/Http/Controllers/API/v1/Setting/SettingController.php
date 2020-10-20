@@ -218,7 +218,7 @@ class SettingController extends Controller
         return $this->sendSuccessResponse($billingInformation, __('validation.common.created', ['module' => 'Billing information']));
 
         $paypalController = app(PaypalController::class);
-        dd('check paypal', $paypalController->storeCardDetailsPaypal());
+        // dd('check paypal', $paypalController->storeCardDetailsPaypal());
 
 
         try {
@@ -241,6 +241,7 @@ class SettingController extends Controller
             $createdCardDetail = $paypalController->storeCardDetailsPaypal($input, $paypalLoginDetail);
         } catch (\Exception $exception) {
             Log::error($exception->getMessage());
+            // Log::error($exception->getLine(), $exception->getMessage());
             // dd('"Exception', $exception->getMessage());
         }
 

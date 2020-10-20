@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers\API\v1\Calender\LogSummary;
 
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Supports\SummaryCalculationTrait;
-use Illuminate\Support\Arr;
 
 class ResistanceCalculationController extends Controller
 {
@@ -15,19 +13,19 @@ class ResistanceCalculationController extends Controller
     protected $total_volume_unit;
     protected $average_weight_lifted_unit;
 
+    /**
+     * __construct => assign initial volume units
+     *
+     * @return void
+     */
     public function __construct()
     {
         $this->total_volume_unit = "kg";
         $this->average_weight_lifted_unit = "kg";
     }
-    /**
-     * How to get Average Weight Lifted:
-     * Total Volume / All the reps in the training log.
-     */
-
 
     /**
-     * generateCalculation =>>> CYCLE ( IN | OUT )
+     * generateCalculation => CYCLE ( IN | OUT )
      *
      * @param  mixed $trainingLog
      * @param  mixed $activityCode
@@ -80,36 +78,48 @@ class ResistanceCalculationController extends Controller
         $response['average_weight_lifted'] = round(($response['total_volume'] / $allRepsCount), 2);
         $response['average_weight_lifted_unit'] = $this->average_weight_lifted_unit;
 
-        // dd('res', $response);
         return $response;
-        // END MAIN
+        // END up the calculations here 
     }
 
+    /**
+     * calculateDuration => calculate main duration 
+     *
+     * @param  mixed $trainingLog
+     * @param  mixed $isDuration
+     * @return void
+     */
     public function calculateDuration($trainingLog, $isDuration)
     {
-        // dd('duration', $trainingLog);
         $totalDurationMinute = 0;
 
         # A) Use phone tracker (when user starts the workout log to when the workout log ends). 
         $start_time = collect($trainingLog['exercise'])->where('start_time', '<>', null)->pluck('start_time')->first();
         $end_time = collect($trainingLog['exercise'])->where('end_time', '<>', null)->pluck('end_time')->first();
-        // dd('check is in start_time and end Time', $start_time, $end_time,   $trainingLog['exercise']);
+
         if (isset($start_time, $end_time)) {
             /** Calculate Total Duration From Start Time To End Time From Exercises */
             $totalDurationMinute = $this->totalDurationMinute($trainingLog);
             $totalDurationMinuteCode = "A";
         }
-        // dd('total rpm ', $total_rpm, $trainingLog['exercise']);
+
+        $totalDurationMinute = round($totalDurationMinute, 2);
         return [
-            'total_duration_minutes' => round($totalDurationMinute, 2),
+            'total_duration_minutes' => $totalDurationMinute,
             'total_duration' => $this->convertDurationMinutesToTimeFormat($totalDurationMinute),
             'total_duration_code' => $totalDurationMinuteCode,
         ];
     }
 
-
-
-    /** used from Generate Calculation  - TrainingLog.php */
+    /**
+     * calculateAvgPace => calculation made up from the Training Log php
+     *
+     * @param  mixed $exercises
+     * @param  mixed $totalDistance
+     * @param  mixed $totalDurationMinute
+     * @param  mixed $activityCode
+     * @return void
+     */
     public function calculateAvgPace($exercises, $totalDistance, $totalDurationMinute, $activityCode)
     {
         $avg_pace = 0;
@@ -117,7 +127,7 @@ class ResistanceCalculationController extends Controller
         // $avg_pace = implode(':', explode('.', $avg_pace));
         $avg_pace = $this->convertPaceNumberTo_M_S_format($avg_pace);
 
-        // "avg pace" End Calculate  -------------------------------------------
+        // "avg pace" End Calculate -------------------------------------------
         return [
             'avg_pace' => $avg_pace ?? null,
             'avg_pace_unit' =>  $this->avg_pace_unit ?? null,

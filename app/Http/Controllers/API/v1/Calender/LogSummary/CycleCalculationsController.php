@@ -59,7 +59,7 @@ class CycleCalculationsController extends Controller
         }
         # END Total Duration 
 
-        # Calculate Active Duration and Minutes
+        # Calculate Active Duration and Minutes || replaced by total_duration
         if ($activityCode == TRAINING_ACTIVITY_CODE_CYCLE_OUTDOOR) {
             $deActiveDuration = $trainingLog['exercise'][0]['deactive_duration']  ?? 0;
             $calculateActiveDuration = $this->calculateActiveDuration($response['total_duration_minutes'], $deActiveDuration);
@@ -103,7 +103,7 @@ class CycleCalculationsController extends Controller
                 $trainingLog['exercise'],
                 $activityCode,
                 $response['total_distance'],
-                $response['total_duration_minutes']
+                $response['active_duration_minutes'] ?? $response['total_duration_minutes']
             );
             $response = array_merge($response, $calculateAverageSpeed);
         }
@@ -341,11 +341,19 @@ class CycleCalculationsController extends Controller
         /** if $totalDurationMinute  is 0 Means *COMPLETE* button clicked */
         $totalDurationMinute = $this->totalDurationMinute(['exercise' => $exercises]);
         $isCompleteButton = (bool) ($totalDurationMinute == 0);
+        if ($activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            $deActiveDuration = $exercises[0]['deactive_duration']  ?? 0;
+            $calculateActiveDuration = $this->calculateActiveDuration($total_duration_minutes, $deActiveDuration);
+            $res = array_merge([], $calculateActiveDuration);
+            $total_duration_minutes =  $res['active_duration_minutes'];
+        }
 
         # A) If the user click on the ‘Start’ button, 
         # use phone location and motion sensors (GPS + Accelerometer) (only for Outdoor)
         if (!$isCompleteButton && $trainingActivityCode == TRAINING_ACTIVITY_CODE_CYCLE_OUTDOOR) {
-            $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            if ($total_duration_minutes != 0 && $total_distance != 0) {
+                $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            }
             // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
             // if (isset($avg_pace)) {
             //     # convert pace to speed
@@ -357,7 +365,9 @@ class CycleCalculationsController extends Controller
         if (!$isCompleteButton && $avg_speed == 0) {
             # B) If the user click on the ‘Start’ button, 
             # record the Average Speed value recorded from the power meter (if available).
-            $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            if ($total_distance != 0 &&  $total_duration_minutes != 0) {
+                $avg_speed = $total_distance / ($total_duration_minutes / 60); // minute to hr
+            }
             // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
             // if (isset($avg_pace)) {
             //     # convert pace to speed
@@ -669,11 +679,14 @@ class CycleCalculationsController extends Controller
         $elevation_gain_code = null;
 
         if ($elevation_gain == 0 && $activityCode == TRAINING_ACTIVITY_CODE_RUN_OUTDOOR) {
+            /*** get elevation_gain from Exercise Last Lap */
+            $elevation_gain = isset(collect($exercises)->last()['elevation_gain']) ? collect($exercises)->last()['elevation_gain'] : 0;
+
             # A) Use phone location sensor (Barometer) (only for Outdoor)
 
             # B) Record the Elevation Gain value recorded from the power meter, exercise watch or
             // phone with barometric altimeter (if available).
-            // Elivation gain getting from app side using (power meter, gps, watch and ...)
+            // Elevation gain getting from app side using (power meter, gps, watch and ...)
             if ($elevation_gain == 0) {
                 $elevation_gain_code = "B";
             }

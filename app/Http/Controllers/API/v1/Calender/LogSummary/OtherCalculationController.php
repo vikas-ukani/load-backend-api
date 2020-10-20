@@ -109,6 +109,7 @@ class OtherCalculationController extends Controller
         } else {
             $calculateAverageSpeed = $this->calculateAverageSpeed(
                 $trainingLog['exercise'],
+                $activityCode,
                 $response['total_distance'],
                 $response['total_duration_minutes']
             );
@@ -293,7 +294,7 @@ class OtherCalculationController extends Controller
      * @param  mixed $total_duration_minutes
      * @return array
      */
-    public function calculateAverageSpeed($exercises, $total_distance, $total_duration_minutes)
+    public function calculateAverageSpeed($exercises, $activityCode,  $total_distance, $total_duration_minutes)
     {
         # A, B, C → D OR E
         $avg_speed = 0;
@@ -385,10 +386,12 @@ class OtherCalculationController extends Controller
         # A) If the user click on the ‘Start’ button, 
         # use phone location and motion sensors (GPS + Accelerometer) (if there is a change in position/ movement)
         /** told by yash */
-        $avg_speed = $totalDistance / $totalDurationMinute;
-        $avg_pace = 60 / $avg_speed;
-        // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
-        $avg_pace_code = "A";
+        if ($totalDurationMinute != 0) {
+            $avg_speed = $totalDistance / $totalDurationMinute;
+            $avg_pace = 60 / $avg_speed;
+            // $avg_pace = collect($exercises)->whereNotIn('avg_total_pace', ['0', 0, '', null])->pluck('avg_total_pace')->first();
+            $avg_pace_code = "A";
+        }
 
         if (!$isCompleteButton && $avg_pace == 0) {
             # B) If the user click on the ‘Start’ button, 

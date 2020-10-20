@@ -202,6 +202,7 @@ class AuthController extends Controller
     {
         try {
             $user = Auth::user();
+            /** to check for from last 2 ween user didn't logged in => checking on cron commands */
             $user->last_login_at = $this->getCurrentDateUTC();
             $user->save();
         } catch (\Exception $exception) {
@@ -209,9 +210,8 @@ class AuthController extends Controller
         }
     }
 
-
     /**
-     * resetPasswordFn => to send mail
+     * resetPasswordFn => for reset password send mail to email and generate new token
      *
      * @param  mixed $request
      *

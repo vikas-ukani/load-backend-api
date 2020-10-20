@@ -94,6 +94,12 @@ class HelperController extends Controller
         return $input;
     }
 
+    /**
+     * convertPaceSeconds => Convert Pace to Second
+     * sample speed convert to the answer of the sample code are done now, ...
+     * @param  mixed $pace
+     * @return void
+     */
     public function convertPaceSeconds($pace)
     {
         # pass
@@ -102,16 +108,13 @@ class HelperController extends Controller
         if (isset($paceArr) && isset($paceArr[1])) {
             // $seconds = (float) ('0.' . $paceArr[1]) * 60;
             $seconds = ('0.' . $paceArr[1]) * 60;
-            // dd('second ', $seconds);
             $secondArr = explode('.', $seconds);
-            // dd('s arra', $paceArr, strval($seconds), $secondArr);
 
+            // removing extra dd's
             if (isset($secondArr)) {
                 $secondArr[1] = isset($secondArr[1]) ? $secondArr[1] : 0;
                 $secondArr[0] += ($secondArr[1] >= 6 ? 1 : 0);
-                // dd('check s', $secondArr[1]);
                 $newPace = $paceArr[0] . ":" . ((strlen($secondArr[0]) == 2) ? $secondArr[0] : "0" . $secondArr[0]);
-                // dd('new pace', $newPace);
                 return $newPace;
             }
         }
@@ -333,7 +336,7 @@ class HelperController extends Controller
      */
     public function convertPaceToSpeed($pace)
     {
-        // New 
+        // New page generate ???
         if (isset($pace)) {
             if (strstr($pace, ':') !== false) {
                 $paceArray = explode(":", $pace);
@@ -346,7 +349,6 @@ class HelperController extends Controller
             $speed = 3600 / $seconds;
             // dd('speed of pace are', $seconds,  $speed, $pace, $paceArray,  strval(round($speed, 1)));
             return strval(round($speed, 1));
-            dd('speed of pace are', $seconds,  $speed, $pace, $paceArray);
         } else {
             return $pace;
         }

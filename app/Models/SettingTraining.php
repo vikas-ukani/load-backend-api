@@ -93,7 +93,9 @@ class SettingTraining extends Model
     }
 
     /**
+     * boot
      *
+     * @return void
      */
     protected static function boot()
     {
@@ -101,14 +103,16 @@ class SettingTraining extends Model
 
         static::retrieved(function ($value) {
             /** calculate hr_max for User Setting to show in  setting module. */
-            $user = \Auth::user();
-            $currentYear = (int) \Carbon\Carbon::now()->year;
-            $dobArray = explode('-', $user->date_of_birth);
-            $birthYear = end($dobArray);
-            $age = $currentYear - (int) $birthYear;
-            $hrMax = (206.9 - (0.67 * (float) ($age)));
-            $hrMax = (string) round($hrMax, 1);
-            $value->hr_max = (int) $hrMax;
+            if (!isset($value->hr_max)) {
+                $user = \Auth::user();
+                $currentYear = (int) \Carbon\Carbon::now()->year;
+                $dobArray = explode('-', $user->date_of_birth);
+                $birthYear = end($dobArray);
+                $age = $currentYear - (int) $birthYear;
+                $hrMax = (206.9 - (0.67 * (float) ($age)));
+                $hrMax = (string) round($hrMax, 1);
+                $value->hr_max = (int) $hrMax;
+            }
         });
     }
 

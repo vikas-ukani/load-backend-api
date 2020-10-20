@@ -43,7 +43,7 @@ class UsersRepositoryEloquent extends BaseRepository implements UsersRepository
      */
     protected function commonFilterFn(&$value, $input)
     {
-        /** searching */
+        /** searching criteria */
         if (isset($input['search'])) {
             $value = $this->customSearch($value, $input, ['name', 'email', 'mobile']);
         }
@@ -54,34 +54,38 @@ class UsersRepositoryEloquent extends BaseRepository implements UsersRepository
         }
 
         /** filter by account id */
-        if (isset($input['account_id'])) {
-            $value = $value->where('account_id', $input['account_id']);
-        }
-        if (isset($input['account_ids']) && is_array($input['account_ids']) && count($input['account_ids'])) {
-            $value = $value->whereIn('account_id', $input['account_ids']);
-        }
-
+        if (isset($input['account_id'])) { 
+            $value = $value->where('account_id', $input['account_id']); 
+        } 
+        if (isset($input['account_ids']) && is_array($input['account_ids']) && count($input['account_ids'])) { 
+            $value = $value->whereIn('account_id', $input['account_ids']); 
+        } 
+ 
         /** get users from id */
-        if (isset($input['user_id'])) {
-            $value = $value->whereUserId($input['user_id']);
-        }
-        /** filter by id  */
-        if (isset($input['id'])) {
-            $value = $value->where('id', $input['id']);
-        }
-        if (isset($input['ids']) && is_array($input['ids']) && count($input['ids'])) {
-            $value = $value->whereIn('id', $input['ids']);
-        }
+        if (isset($input['user_id'])) { 
+            $value = $value->whereUserId($input['user_id']); 
+        } 
 
-        if (isset($input['name'])) {
-            $value = $value->whereName($input['name']);
-        }
+        /** filter by id */
+        if (isset($input['id'])) { 
+            $value = $value->where('id', $input['id']); 
+        } 
+        if (isset($input['ids']) && is_array($input['ids']) && count($input['ids'])) { 
+            $value = $value->whereIn('id', $input['ids']); 
+        } 
 
-        if (isset($input['email'])) {
-            $value = $value->whereEmail($input['email']);
-        }
+        /** check names */
+        if (isset($input['name'])) { 
+            $value = $value->whereName($input['name']); 
+        }  
 
-        $this->customRelation($value, $input, []); //'account_detail'
+        /** check email  */
+        if (isset($input['email'])) { 
+            $value = $value->whereEmail($input['email']); 
+        } 
+
+        // added relation here.
+        $this->customRelation($value, $input, []); // 'account_detail'
 
         /** gender and genders wise filter */
         if (isset($input['gender'])) {
@@ -104,7 +108,7 @@ class UsersRepositoryEloquent extends BaseRepository implements UsersRepository
             $value = $value->where('last_login_at', '<=', $input['last_login_at']);
         }
 
-        /** check last login is have null  */
+        /** check last login is have null */
         if (isset($input['is_last_login']) && $input['is_last_login'] == false) {
             $value = $value->orWhereNull('last_login_at');
         }
@@ -143,7 +147,7 @@ class UsersRepositoryEloquent extends BaseRepository implements UsersRepository
             $value = $value->where('longitude', $input['longitude']);
         }
 
-
+        // check whether user is snoozed or not.
         if (isset($input['is_snooze'])) {
             $value = $value->where('is_snooze', $input['is_snooze']);
         }
@@ -197,8 +201,12 @@ class UsersRepositoryEloquent extends BaseRepository implements UsersRepository
     public function getDetails($input = null)
     {
         $value = $this->makeModel();
+
+        // common filter applied here
         $this->commonFilterFn($value, $input);
+
         $count = $value->count();
+        // custom pagination and and sorting common functions.
         $this->getCommonPaginationFilterFn($value, $input);
 
         return [
@@ -213,14 +221,13 @@ class UsersRepositoryEloquent extends BaseRepository implements UsersRepository
      * @param  mixed $input => updated input
      * @param  mixed $id => update id record
      *
-     * @return void
+     * @return objects
      */
     public function updateRich($input, $id)
     {
         $value = $this->makeModel();
         $value = $value->whereId($id)->first();
 
-        // $value->fill($input)->update();
         if (isset($value)) {
             $value->fill($input)->update();
             return $value->fresh();

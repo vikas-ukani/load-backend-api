@@ -158,7 +158,7 @@ class AccountRepositoryEloquent extends BaseRepository implements UsersRepositor
      *
      * @param  mixed $input
      *
-     * @return void
+     * @return object
      */
     public function getDetailsByInput($input = null)
     {

@@ -85,19 +85,19 @@ class TrainingLogController extends Controller
      */
     public function saveToTemplateAsSavedWorkout($id)
     {
-        $trainingLog = $this->trainingLogRepository->getDetailsByInput([ 
-            'id' => $id, 
-            'first' => true, 
-        ]); 
-        if (!isset($trainingLog)) { 
-            return $this->sendBadRequest(null, __('validation.common.details_not_found', ['module' => $this->moduleName])); 
-        } 
+        $trainingLog = $this->trainingLogRepository->getDetailsByInput([
+            'id' => $id,
+            'first' => true,
+        ]);
+        if (!isset($trainingLog)) {
+            return $this->sendBadRequest(null, __('validation.common.details_not_found', ['module' => $this->moduleName]));
+        }
         $trainingLog->is_log = false; // set to false means show for both log and template 
-        $trainingLog->save(); 
-        $template = $this->saveWorkoutAsTemplate($trainingLog); 
-        if (isset($template) && $template['flag'] == false) { 
+        $trainingLog->save();
+        $template = $this->saveWorkoutAsTemplate($trainingLog);
+        if (isset($template) && $template['flag'] == false) {
             return $this->sendBadRequest(null, $template['message']);
-        } 
+        }
         return $this->sendSuccessResponse($template['data'], __("validation.common.created", ["module" => $this->moduleName]));
     }
 
@@ -489,7 +489,12 @@ class TrainingLogController extends Controller
         $trainingLog = $this->trainingLogRepository->update($input, $id);
         return $this->sendSuccessResponse($trainingLog, __('validation.common.saved', ['module' => $this->moduleName]));
     }
-
+    
+    /**
+     * listOfLogCardioValidations
+     *
+     * @return void
+     */
     public function listOfLogCardioValidations()
     {
         $logCardioValidations = $this->logCardioValidationsRepository->getDetailsByInput([
@@ -637,10 +642,9 @@ class TrainingLogController extends Controller
                 'is_pace_selected' => $is_pace_selected ?? false
             ];
 
-
             return $this->sendSuccessResponse($response, __('validation.common.updated', ['module' => $this->moduleName]));
         } else {
-            # Initial time
+            # Initial time (while first time log calculations creating...)
             if (!is_array($log))
                 $log = $log->toArray();
 
@@ -731,6 +735,13 @@ class TrainingLogController extends Controller
                 $response['total_distance'],
                 $response['total_duration_minutes']
             );
+        } else if (method_exists($ActivityCalculationController, 'calculateAverageSpeedPace')) {
+            $calculateAverageSpeed = $ActivityCalculationController->calculateAverageSpeedPace(
+                $trainingLog['exercise'],
+                $response['avg_pace'] ?? 0,
+                $response['total_distance'],
+                $response['total_duration_minutes']
+            );
         } else {
             $calculateAverageSpeed = [
                 'avg_speed' => null,
@@ -799,7 +810,7 @@ class TrainingLogController extends Controller
 
         // if (in_array($activityCode, [TRAINING_ACTIVITY_CODE_RUN_INDOOR, TRAINING_ACTIVITY_CODE_RUN_OUTDOOR])) {
         /** Run activity */
-        # Pace = Time / Distance        
+        # Pace = Time / Distance         
         $avgPace = ($newDistance == 0 ? 0 : ($durationMinutes / $newDistance));
         $avgPace = round($avgPace, 4);
 

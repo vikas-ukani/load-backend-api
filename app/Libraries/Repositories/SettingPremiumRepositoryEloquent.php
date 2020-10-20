@@ -177,7 +177,7 @@ class SettingPremiumRepositoryEloquent extends BaseRepository implements UsersRe
      *
      * @param  mixed $input
      *
-     * @return void
+     * @return object
      */
     public function getDetailsByInput($input = null)
     {

@@ -23,7 +23,7 @@ trait SummaryCalculationTrait
         $arrLast = Arr::last($trainingLog['exercise']);
 
         // if start_time is "0" means COMPLETE button Clicked
-        if ($arrFirst['start_time'] == "" || !isset($arrLast['end_time'])  ||  $arrLast['end_time'] == "") {
+        if (!isset($arrFirst['start_time']) || $arrFirst['start_time'] == "" || !isset($arrLast['end_time'])  ||  $arrLast['end_time'] == "") {
             return 0; // COMPLETE button clicked.
         }
 
@@ -34,7 +34,7 @@ trait SummaryCalculationTrait
         /** generate date format from start and end time */
         $startWorkout = \Carbon\Carbon::createFromDate($exerciseStartTime);
         $endWorkout = \Carbon\Carbon::createFromDate($exerciseEndTime);
-
+        // try to minimize this error
         /** get different between start time and end time */
         $totalDurationInTime = $startWorkout->diff($endWorkout)->format('%H:%I:%S');
         $totalDurationInTime = \Carbon\Carbon::parse($totalDurationInTime);
@@ -544,13 +544,13 @@ trait SummaryCalculationTrait
 
             $AverageSpeed = round(($TotalDistance / $TotalDuration), 1);
             $AverageSpeed = $AverageSpeed == 0 ? 1 : $AverageSpeed;
+            return  $AverageSpeed;
 
             #  Step 5 – Find Average Pace
             # Average Pace = 60 / Average Speed
             # Average Pace = 60 / 9.6
             # = 6.25 mins
             $AveragePace = 60 / $AverageSpeed;
-            return  $AverageSpeed;
         } else if ($isDuration && $isPace) {
             # Method 2: To find Average Speed
             # If user uses Duration and Pace:
@@ -1203,7 +1203,7 @@ trait SummaryCalculationTrait
      */
     public function convertPaceNumberTo_M_S_format(float $pace = 0.0)
     {
-        // $pace =  9.90; // static check // no longer needed
+        // $pace = 9.90; // static check // no longer needed
         $pace = round($pace, 2);
         $avgPaceArr = explode('.', $pace);
         $floatPace = '0.' . ($avgPaceArr[1] ?? 0);
@@ -1212,7 +1212,6 @@ trait SummaryCalculationTrait
         $paceFormatted = (in_array($avgPaceArr[0], range(0, 9)) ? $avgPaceArr[0] : $avgPaceArr[0])
             . ':'
             . (in_array($floatPaceArr[0], range(0, 9)) ? '0' . $floatPaceArr[0] : $floatPaceArr[0]);
-        // dd('check what is pace ', $pace,  $paceFormatted);
         return $paceFormatted;
     }
 
