@@ -36,7 +36,7 @@
         "@fortawesome/vue-fontawesome": "^0.1.6",
         "apexcharts": "^3.8.4",
         "bootstrap-vue": "^2.0.0-rc.24",
-        "chart.js": "^2.8.0",
+        "chart.js": "^2.9.4",
         "font-awesome": "^4.7.0",
         "font-awesome-sass": "^4.7.0",
         "simple-line-icons": "^2.4.1",
